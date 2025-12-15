@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import RiskMapCanvas from "@/components/RiskMapCanvas";
 import RiskLegend from "@/components/RiskLegend";
 import Header from "@/components/Header";
+import { useLocation, useRoute } from "wouter";
 
 interface Risk {
   id: number;
@@ -22,14 +23,40 @@ interface Risk {
 }
 
 export default function RiskMapEditor() {
+  const [, params] = useRoute("/editor/:mapId");
+  const existingMapId = params?.mapId ? parseInt(params.mapId) : null;
+  
   const [description, setDescription] = useState("");
   const [floorPlanSvg, setFloorPlanSvg] = useState<string | null>(null);
   const [risks, setRisks] = useState<Risk[]>([]);
-  const [mapId, setMapId] = useState<number | null>(null);
+  const [mapId, setMapId] = useState<number | null>(existingMapId);
   const [isLoading, setIsLoading] = useState(false);
   const [showRiskForm, setShowRiskForm] = useState(false);
   const [mapDimensions, setMapDimensions] = useState({ width: 1000, height: 800 });
   const canvasRef = useRef<HTMLDivElement>(null);
+  
+  // Carregar mapa existente se mapId foi fornecido
+  const { data: existingMap } = trpc.riskMaps.get.useQuery(
+    { mapId: existingMapId! },
+    { enabled: !!existingMapId }
+  );
+  // Riscos virão do resultado do get que retorna map + risks
+  
+  useEffect(() => {
+    if (existingMap) {
+      const mapData = existingMap.map || existingMap;
+      setDescription(mapData.description || "");
+      setFloorPlanSvg(mapData.floorPlanSvg);
+      setMapDimensions({
+        width: mapData.width,
+        height: mapData.height,
+      });
+      
+      if (existingMap.risks) {
+        setRisks(existingMap.risks as Risk[]);
+      }
+    }
+  }, [existingMap]);
 
   const generateFloorPlanMutation = trpc.ai.generateFloorPlan.useMutation();
   const identifyRisksMutation = trpc.ai.identifyRisks.useMutation();
@@ -311,13 +338,17 @@ function AddRiskForm({ onAdd, onCancel }: AddRiskFormProps) {
       return;
     }
 
+    // Calcular centro do mapa (assumindo 1000x800 como padrao)
+    const centerX = 500;
+    const centerY = 400;
+
     onAdd({
       type,
       severity,
       label,
       description,
-      xPosition: 500,
-      yPosition: 400,
+      xPosition: centerX,
+      yPosition: centerY,
       radius: getSeverityRadius(severity),
       color: getRiskColor(type),
     });

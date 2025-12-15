@@ -9,7 +9,7 @@ import Header from "@/components/Header";
 
 export default function SavedMaps() {
   const [, setLocation] = useLocation();
-  const { data: maps, isLoading } = trpc.riskMaps.list.useQuery();
+  const { data: maps, isLoading, refetch } = trpc.riskMaps.list.useQuery();
   const deleteMapMutation = trpc.riskMaps.delete.useMutation();
 
   const handleDelete = async (mapId: number) => {
@@ -17,6 +17,8 @@ export default function SavedMaps() {
 
     try {
       await deleteMapMutation.mutateAsync({ mapId });
+      // Invalidar cache para remover o card imediatamente
+      await refetch();
       toast.success("Mapa deletado com sucesso!");
     } catch (error) {
       console.error("Error deleting map:", error);

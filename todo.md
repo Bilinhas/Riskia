@@ -95,3 +95,11 @@
 ## Bugs Críticos - Sexta Rodada
 
 - [x] Corrigir erro de setState durante render na página Home
+
+
+## Melhorias Finais
+
+- [x] Novo risco aparece no centro do mapa
+- [x] Descrição do mapa é salva no banco de dados
+- [x] Deleção de mapa remove card imediatamente sem refresh
+- [x] Descrição é carregada ao editar mapa existente
