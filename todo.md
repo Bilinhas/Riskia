@@ -75,3 +75,8 @@
 - [x] Corrigir drag-and-drop que agrupa riscos ao arrastar
 - [x] Corrigir deleção que remove todos os riscos ao invés de um
 - [x] Corrigir persistência de mapId e validação "mapa não foi criado"
+
+
+## Bugs Críticos - Terceira Rodada
+
+- [x] Corrigir erro de chaves duplicadas em renderização de riscos (risk-0 duplicado)

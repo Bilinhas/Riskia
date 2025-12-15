@@ -94,9 +94,9 @@ export default function RiskMapCanvas({
 
       {/* Risk Markers */}
       <div className="absolute inset-0 pointer-events-none">
-        {risks.map((risk) => (
+        {risks.map((risk, index) => (
           <div
-            key={`risk-${risk.id}`}
+            key={`risk-${risk.id}-${index}`}
             className="absolute pointer-events-auto group"
             style={{
               left: `${risk.xPosition}px`,

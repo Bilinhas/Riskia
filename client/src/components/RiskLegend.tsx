@@ -33,9 +33,9 @@ const typeLabels: Record<string, string> = {
 export default function RiskLegend({ risks, onDeleteRisk }: RiskLegendProps) {
   return (
     <div className="space-y-3">
-      {risks.map((risk) => (
+      {risks.map((risk, index) => (
         <div
-          key={risk.id}
+          key={`risk-legend-${risk.id}-${index}`}
           className="flex items-center gap-4 p-3 bg-muted rounded-lg hover:bg-muted/80 transition-colors"
         >
           {/* Color Circle */}
