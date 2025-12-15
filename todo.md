@@ -103,3 +103,11 @@
 - [x] Descrição do mapa é salva no banco de dados
 - [x] Deleção de mapa remove card imediatamente sem refresh
 - [x] Descrição é carregada ao editar mapa existente
+
+
+## Nova Funcionalidade - Salvamento em Tempo Real
+
+- [x] Implementar hook de debounce para salvar posições
+- [x] Integrar salvamento automático no RiskMapCanvas
+- [x] Adicionar feedback visual de salvamento
+- [x] Testar persistência de posições

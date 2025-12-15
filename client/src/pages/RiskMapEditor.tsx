@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
+import { useDebounce } from "@/hooks/useDebounce";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
@@ -35,6 +36,13 @@ export default function RiskMapEditor() {
   const [mapDimensions, setMapDimensions] = useState({ width: 1000, height: 800 });
   const canvasRef = useRef<HTMLDivElement>(null);
   
+  // Limpar timeouts pendentes ao desmontar
+  useEffect(() => {
+    return () => {
+      pendingSavesRef.current.clear();
+    };
+  }, []);
+  
   // Carregar mapa existente se mapId foi fornecido
   const { data: existingMap } = trpc.riskMaps.get.useQuery(
     { mapId: existingMapId! },
@@ -63,6 +71,39 @@ export default function RiskMapEditor() {
   const createMapMutation = trpc.riskMaps.create.useMutation();
   const addRiskMutation = trpc.risks.add.useMutation();
   const deleteRiskMutation = trpc.risks.delete.useMutation();
+  const updatePositionMutation = trpc.risks.updatePosition.useMutation();
+  
+  // Estado para rastrear salvamentos pendentes
+  const [isSaving, setIsSaving] = useState(false);
+  const pendingSavesRef = useRef<Set<number>>(new Set());
+  
+  // Função para salvar posição de um risco
+  const saveRiskPosition = async (riskId: number, x: number, y: number) => {
+    if (!mapId || mapId === 0) return;
+    
+    try {
+      setIsSaving(true);
+      await updatePositionMutation.mutateAsync({
+        riskId,
+        xPosition: x,
+        yPosition: y,
+      });
+      pendingSavesRef.current.delete(riskId);
+    } catch (error) {
+      console.error("Erro ao salvar posição:", error);
+      toast.error("Erro ao salvar posição do risco");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+  
+  // Debounce para salvar posição (aguarda 1 segundo após o último movimento)
+  const debouncedSavePosition = useDebounce(
+    (riskId: number, x: number, y: number) => {
+      saveRiskPosition(riskId, x, y);
+    },
+    1000
+  );
 
   // Função para gerar posições distribuídas para evitar sobreposição
   const generateDistributedPosition = (index: number, total: number) => {
@@ -197,16 +238,29 @@ export default function RiskMapEditor() {
   };
 
   const handleUpdateRiskPosition = (riskId: number, x: number, y: number) => {
+    // Atualizar estado local imediatamente para feedback visual
     setRisks((prevRisks) =>
       prevRisks.map((r) =>
         r.id === riskId ? { ...r, xPosition: x, yPosition: y } : r
       )
     );
+    
+    // Marcar como pendente de salvamento
+    pendingSavesRef.current.add(riskId);
+    
+    // Salvar com debounce
+    debouncedSavePosition(riskId, x, y);
   };
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Header />
+      {isSaving && (
+        <div className="bg-blue-50 border-b border-blue-200 px-6 py-2 text-sm text-blue-700 flex items-center gap-2">
+          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+          Salvando posições...
+        </div>
+      )}
       <div className="flex-1 p-6">
         <div className="max-w-7xl mx-auto">
           <div className="mb-8">
