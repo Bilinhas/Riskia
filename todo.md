@@ -61,3 +61,11 @@
 - [x] Criar checkpoint final
 - [x] Documentar instruções de uso
 - [x] Preparar para publicação
+
+
+## Bugs Encontrados e Correções
+
+- [x] Corrigir sobreposição de riscos gerados automaticamente
+- [x] Corrigir funcionalidade de adicionar riscos manualmente
+- [x] Melhorar distribuição de riscos no mapa
+- [x] Validar form de adição de riscos

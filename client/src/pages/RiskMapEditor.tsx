@@ -28,6 +28,7 @@ export default function RiskMapEditor() {
   const [mapId, setMapId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showRiskForm, setShowRiskForm] = useState(false);
+  const [mapDimensions, setMapDimensions] = useState({ width: 1000, height: 800 });
   const canvasRef = useRef<HTMLDivElement>(null);
 
   const generateFloorPlanMutation = trpc.ai.generateFloorPlan.useMutation();
@@ -35,6 +36,29 @@ export default function RiskMapEditor() {
   const createMapMutation = trpc.riskMaps.create.useMutation();
   const addRiskMutation = trpc.risks.add.useMutation();
   const deleteRiskMutation = trpc.risks.delete.useMutation();
+
+  // Função para gerar posições distribuídas para evitar sobreposição
+  const generateDistributedPosition = (index: number, total: number) => {
+    const padding = 100;
+    const availableWidth = mapDimensions.width - padding * 2;
+    const availableHeight = mapDimensions.height - padding * 2;
+
+    // Criar grid de posições
+    const cols = Math.ceil(Math.sqrt(total));
+    const cellWidth = availableWidth / cols;
+    const cellHeight = availableHeight / Math.ceil(total / cols);
+
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+
+    const x = padding + col * cellWidth + cellWidth / 2 + (Math.random() - 0.5) * 40;
+    const y = padding + row * cellHeight + cellHeight / 2 + (Math.random() - 0.5) * 40;
+
+    return {
+      xPosition: Math.max(50, Math.min(mapDimensions.width - 50, x)),
+      yPosition: Math.max(50, Math.min(mapDimensions.height - 50, y)),
+    };
+  };
 
   const handleGenerateMap = async () => {
     if (!description.trim()) {
@@ -49,6 +73,10 @@ export default function RiskMapEditor() {
         description,
       });
       setFloorPlanSvg(floorPlanResponse.svg);
+      setMapDimensions({
+        width: floorPlanResponse.width,
+        height: floorPlanResponse.height,
+      });
 
       // Identify risks
       const identifiedRisks = await identifyRisksMutation.mutateAsync({
@@ -66,17 +94,20 @@ export default function RiskMapEditor() {
 
       setMapId(mapResult.insertId as number);
 
-      // Add identified risks to the map
+      // Add identified risks to the map with distributed positions
       const newRisks: Risk[] = [];
-      for (const risk of identifiedRisks) {
+      for (let i = 0; i < identifiedRisks.length; i++) {
+        const risk = identifiedRisks[i];
+        const position = generateDistributedPosition(i, identifiedRisks.length);
+
         const riskData = {
           mapId: mapResult.insertId as number,
           type: risk.type,
           severity: risk.severity,
           label: risk.label,
           description: risk.description,
-          xPosition: Math.random() * 800 + 100,
-          yPosition: Math.random() * 600 + 100,
+          xPosition: position.xPosition,
+          yPosition: position.yPosition,
           radius: getSeverityRadius(risk.severity),
           color: getRiskColor(risk.type),
         };
@@ -149,112 +180,112 @@ export default function RiskMapEditor() {
     <div className="min-h-screen bg-background flex flex-col">
       <Header />
       <div className="flex-1 p-6">
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-4xl font-light text-foreground mb-2">
-            Mapa de Risco Ocupacional
-          </h1>
-          <p className="text-muted-foreground">
-            Gere mapas de risco inteligentes com IA
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Input Section */}
-          <div className="lg:col-span-1">
-            <Card className="p-6 sticky top-6">
-              <h2 className="text-lg font-semibold mb-4 text-foreground">
-                Descrição do Ambiente
-              </h2>
-
-              <Textarea
-                placeholder="Descreva o layout do seu ambiente de trabalho, quantidade de empregados, equipamentos, etc..."
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="mb-4 h-40 resize-none"
-              />
-
-              <Button
-                onClick={handleGenerateMap}
-                disabled={isLoading}
-                className="w-full mb-4"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Gerando...
-                  </>
-                ) : (
-                  "Gerar Mapa"
-                )}
-              </Button>
-
-              {floorPlanSvg && (
-                <>
-                  <Button
-                    onClick={() => setShowRiskForm(!showRiskForm)}
-                    variant="outline"
-                    className="w-full"
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Adicionar Risco
-                  </Button>
-
-                  {showRiskForm && (
-                    <AddRiskForm
-                      onAdd={handleAddRisk}
-                      onCancel={() => setShowRiskForm(false)}
-                    />
-                  )}
-                </>
-              )}
-            </Card>
+        <div className="max-w-7xl mx-auto">
+          <div className="mb-8">
+            <h1 className="text-4xl font-light text-foreground mb-2">
+              Mapa de Risco Ocupacional
+            </h1>
+            <p className="text-muted-foreground">
+              Gere mapas de risco inteligentes com IA
+            </p>
           </div>
 
-          {/* Map and Legend Section */}
-          <div className="lg:col-span-2">
-            {floorPlanSvg ? (
-              <div className="space-y-6">
-                <Card className="p-6 bg-card">
-                  <h2 className="text-lg font-semibold mb-4 text-foreground">
-                    Planta Baixa
-                  </h2>
-                  <div
-                    ref={canvasRef}
-                    className="bg-white rounded-lg border border-border overflow-auto"
-                  >
-                    <RiskMapCanvas
-                      svg={floorPlanSvg}
-                      risks={risks}
-                      onRiskPositionChange={handleUpdateRiskPosition}
-                      onRiskDelete={handleDeleteRisk}
-                    />
-                  </div>
-                </Card>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Input Section */}
+            <div className="lg:col-span-1">
+              <Card className="p-6 sticky top-6">
+                <h2 className="text-lg font-semibold mb-4 text-foreground">
+                  Descrição do Ambiente
+                </h2>
 
-                {risks.length > 0 && (
+                <Textarea
+                  placeholder="Descreva o layout do seu ambiente de trabalho, quantidade de empregados, equipamentos, etc..."
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="mb-4 h-40 resize-none"
+                />
+
+                <Button
+                  onClick={handleGenerateMap}
+                  disabled={isLoading}
+                  className="w-full mb-4"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Gerando...
+                    </>
+                  ) : (
+                    "Gerar Mapa"
+                  )}
+                </Button>
+
+                {floorPlanSvg && (
+                  <>
+                    <Button
+                      onClick={() => setShowRiskForm(!showRiskForm)}
+                      variant="outline"
+                      className="w-full"
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Adicionar Risco
+                    </Button>
+
+                    {showRiskForm && (
+                      <AddRiskForm
+                        onAdd={handleAddRisk}
+                        onCancel={() => setShowRiskForm(false)}
+                      />
+                    )}
+                  </>
+                )}
+              </Card>
+            </div>
+
+            {/* Map and Legend Section */}
+            <div className="lg:col-span-2">
+              {floorPlanSvg ? (
+                <div className="space-y-6">
                   <Card className="p-6 bg-card">
                     <h2 className="text-lg font-semibold mb-4 text-foreground">
-                      Legenda de Riscos
+                      Planta Baixa
                     </h2>
-                    <RiskLegend risks={risks} onDeleteRisk={handleDeleteRisk} />
+                    <div
+                      ref={canvasRef}
+                      className="bg-white rounded-lg border border-border overflow-auto"
+                    >
+                      <RiskMapCanvas
+                        svg={floorPlanSvg}
+                        risks={risks}
+                        onRiskPositionChange={handleUpdateRiskPosition}
+                        onRiskDelete={handleDeleteRisk}
+                      />
+                    </div>
                   </Card>
-                )}
-              </div>
-            ) : (
-              <Card className="p-12 text-center bg-card border-2 border-dashed border-border">
-                <p className="text-muted-foreground mb-2">
-                  Descreva seu ambiente de trabalho para gerar o mapa
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  A IA irá gerar uma planta baixa e identificar riscos
-                  automaticamente
-                </p>
-              </Card>
-            )}
+
+                  {risks.length > 0 && (
+                    <Card className="p-6 bg-card">
+                      <h2 className="text-lg font-semibold mb-4 text-foreground">
+                        Legenda de Riscos
+                      </h2>
+                      <RiskLegend risks={risks} onDeleteRisk={handleDeleteRisk} />
+                    </Card>
+                  )}
+                </div>
+              ) : (
+                <Card className="p-12 text-center bg-card border-2 border-dashed border-border">
+                  <p className="text-muted-foreground mb-2">
+                    Descreva seu ambiente de trabalho para gerar o mapa
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    A IA irá gerar uma planta baixa e identificar riscos
+                    automaticamente
+                  </p>
+                </Card>
+              )}
+            </div>
           </div>
         </div>
-      </div>
       </div>
     </div>
   );
@@ -292,6 +323,8 @@ function AddRiskForm({ onAdd, onCancel }: AddRiskFormProps) {
 
     setLabel("");
     setDescription("");
+    setType("ergonomic");
+    setSeverity("medium");
   };
 
   return (
