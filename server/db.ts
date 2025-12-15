@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { InsertUser, users, riskMaps, risks, InsertRiskMap, InsertRisk } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -89,4 +89,111 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+/**
+ * Get all risk maps for a user
+ */
+export async function getUserRiskMaps(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db
+    .select()
+    .from(riskMaps)
+    .where(eq(riskMaps.userId, userId))
+    .orderBy((t) => t.createdAt);
+}
+
+/**
+ * Get a specific risk map with all its risks
+ */
+export async function getRiskMapWithRisks(mapId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const map = await db
+    .select()
+    .from(riskMaps)
+    .where(eq(riskMaps.id, mapId))
+    .limit(1);
+
+  if (!map.length || map[0].userId !== userId) return null;
+
+  const mapRisks = await db
+    .select()
+    .from(risks)
+    .where(eq(risks.mapId, mapId));
+
+  return { map: map[0], risks: mapRisks };
+}
+
+/**
+ * Create a new risk map
+ */
+export async function createRiskMap(data: InsertRiskMap) {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+
+  const result = await db.insert(riskMaps).values(data);
+  return result;
+}
+
+/**
+ * Add a risk to a map
+ */
+export async function addRisk(data: InsertRisk) {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+
+  const result = await db.insert(risks).values(data);
+  return result;
+}
+
+/**
+ * Update risk position (for drag and drop)
+ */
+export async function updateRiskPosition(
+  riskId: number,
+  xPosition: number,
+  yPosition: number
+) {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+
+  return db
+    .update(risks)
+    .set({ xPosition, yPosition })
+    .where(eq(risks.id, riskId));
+}
+
+/**
+ * Update risk properties
+ */
+export async function updateRisk(riskId: number, data: Partial<InsertRisk>) {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+
+  return db.update(risks).set(data).where(eq(risks.id, riskId));
+}
+
+/**
+ * Delete a risk
+ */
+export async function deleteRisk(riskId: number) {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+
+  return db.delete(risks).where(eq(risks.id, riskId));
+}
+
+/**
+ * Delete a risk map and all its risks
+ */
+export async function deleteRiskMap(mapId: number) {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+
+  // Delete all risks first
+  await db.delete(risks).where(eq(risks.mapId, mapId));
+  // Then delete the map
+  return db.delete(riskMaps).where(eq(riskMaps.id, mapId));
+}

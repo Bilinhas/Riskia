@@ -1,31 +1,54 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
+import { useLocation } from "wouter";
 import { getLoginUrl } from "@/const";
-import { Streamdown } from 'streamdown';
+import { ArrowRight } from "lucide-react";
 
-/**
- * All content in this page are only for example, replace with your own feature implementation
- * When building pages, remember your instructions in Frontend Workflow, Frontend Best Practices, Design Guide and Common Pitfalls
- */
 export default function Home() {
-  // The userAuth hooks provides authentication state
-  // To implement login/logout functionality, simply call logout() or redirect to getLoginUrl()
-  let { user, loading, error, isAuthenticated, logout } = useAuth();
+  const [, setLocation] = useLocation();
+  const { isAuthenticated, loading } = useAuth();
 
-  // If theme is switchable in App.tsx, we can implement theme toggling like this:
-  // const { theme, toggleTheme } = useTheme();
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="animate-pulse text-foreground">Carregando...</div>
+        </div>
+      </div>
+    );
+  }
 
-  return (
-    <div className="min-h-screen flex flex-col">
-      <main>
-        {/* Example: lucide-react for icons */}
-        <Loader2 className="animate-spin" />
-        Example Page
-        {/* Example: Streamdown for markdown rendering */}
-        <Streamdown>Any **markdown** content</Streamdown>
-        <Button variant="default">Example Button</Button>
-      </main>
-    </div>
-  );
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background px-4">
+        <div className="max-w-md text-center space-y-6">
+          <div>
+            <h1 className="text-4xl font-light text-foreground mb-2">
+              Mapa de Risco IA
+            </h1>
+            <p className="text-lg text-muted-foreground">
+              Gere mapas de risco ocupacional inteligentes com IA
+            </p>
+          </div>
+
+          <p className="text-muted-foreground">
+            Descreva seu ambiente de trabalho e deixe a IA gerar uma planta
+            baixa com identificação automática de riscos ocupacionais.
+          </p>
+
+          <Button
+            onClick={() => (window.location.href = getLoginUrl())}
+            className="w-full h-12 text-base"
+          >
+            Entrar
+            <ArrowRight className="ml-2 h-5 w-5" />
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Redirect to editor
+  setLocation("/editor");
+  return null;
 }
