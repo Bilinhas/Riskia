@@ -85,3 +85,8 @@
 ## Bugs Críticos - Quarta Rodada
 
 - [x] Corrigir drag-and-drop que move todos os círculos ao invés de apenas o selecionado
+
+
+## Bugs Críticos - Quinta Rodada
+
+- [x] Corrigir mapId sendo 0 ao tentar adicionar risco manualmente

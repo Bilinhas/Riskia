@@ -56,7 +56,13 @@ export const appRouter = router({
           width: input.width,
           height: input.height,
         });
-        return { insertId: (result as any).insertId || 0 };
+        // Drizzle returns the result with insertId in the first element of the array
+        const insertId = (result as any)[0]?.insertId || (result as any).insertId;
+        if (!insertId) {
+          console.error('Drizzle result:', result);
+          throw new Error('Failed to create risk map: no insertId returned');
+        }
+        return { insertId };
       }),
 
     delete: protectedProcedure
@@ -100,7 +106,13 @@ export const appRouter = router({
           radius: input.radius,
           color: input.color,
         });
-        return { insertId: (result as any).insertId || 0 };
+        // Drizzle returns the result with insertId in the first element of the array
+        const insertId = (result as any)[0]?.insertId || (result as any).insertId;
+        if (!insertId) {
+          console.error('Drizzle result:', result);
+          throw new Error('Failed to create risk map: no insertId returned');
+        }
+        return { insertId };
       }),
 
     updatePosition: protectedProcedure

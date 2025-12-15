@@ -132,8 +132,8 @@ export default function RiskMapEditor() {
   };
 
   const handleAddRisk = async (riskData: Omit<Risk, "id">) => {
-    if (!mapId) {
-      console.error("MapId is null:", mapId);
+    if (!mapId || mapId === 0) {
+      console.error("MapId is invalid:", mapId);
       toast.error("Mapa não foi criado. Por favor, gere um mapa primeiro.");
       return;
     }
