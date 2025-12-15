@@ -3,10 +3,18 @@ import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
 import { getLoginUrl } from "@/const";
 import { ArrowRight } from "lucide-react";
+import { useEffect } from "react";
 
 export default function Home() {
   const [, setLocation] = useLocation();
   const { isAuthenticated, loading } = useAuth();
+
+  // Redirect to editor when authenticated
+  useEffect(() => {
+    if (isAuthenticated && !loading) {
+      setLocation("/editor");
+    }
+  }, [isAuthenticated, loading, setLocation]);
 
   if (loading) {
     return (
@@ -48,7 +56,12 @@ export default function Home() {
     );
   }
 
-  // Redirect to editor
-  setLocation("/editor");
-  return null;
+  // Render authenticated content
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="text-center">
+        <div className="animate-pulse text-foreground">Redirecionando...</div>
+      </div>
+    </div>
+  );
 }

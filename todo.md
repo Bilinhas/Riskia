@@ -90,3 +90,8 @@
 ## Bugs Críticos - Quinta Rodada
 
 - [x] Corrigir mapId sendo 0 ao tentar adicionar risco manualmente
+
+
+## Bugs Críticos - Sexta Rodada
+
+- [x] Corrigir erro de setState durante render na página Home
