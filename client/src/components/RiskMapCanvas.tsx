@@ -33,12 +33,15 @@ export default function RiskMapCanvas({
 
   const handleMouseDown = (e: React.MouseEvent, riskId: number) => {
     e.preventDefault();
+    e.stopPropagation();
+    
     const risk = risks.find((r) => r.id === riskId);
     if (!risk) return;
 
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
 
+    // Calcular o offset do mouse em relação ao centro do círculo
     const offsetX = e.clientX - rect.left - risk.xPosition;
     const offsetY = e.clientY - rect.top - risk.yPosition;
 
@@ -53,8 +56,13 @@ export default function RiskMapCanvas({
       const rect = containerRef.current?.getBoundingClientRect();
       if (!rect) return;
 
-      const x = Math.max(0, Math.min(e.clientX - rect.left - dragOffset.x, rect.width));
-      const y = Math.max(0, Math.min(e.clientY - rect.top - dragOffset.y, rect.height));
+      // Calcular nova posição subtraindo o offset
+      let x = e.clientX - rect.left - dragOffset.x;
+      let y = e.clientY - rect.top - dragOffset.y;
+
+      // Limitar dentro dos limites do container
+      x = Math.max(0, Math.min(x, rect.width));
+      y = Math.max(0, Math.min(y, rect.height));
 
       onRiskPositionChange(draggingRiskId, x, y);
     };
@@ -88,14 +96,15 @@ export default function RiskMapCanvas({
       <div className="absolute inset-0 pointer-events-none">
         {risks.map((risk) => (
           <div
-            key={risk.id}
+            key={`risk-${risk.id}`}
             className="absolute pointer-events-auto group"
             style={{
               left: `${risk.xPosition}px`,
               top: `${risk.yPosition}px`,
               transform: "translate(-50%, -50%)",
-              cursor: "grab",
+              cursor: draggingRiskId === risk.id ? "grabbing" : "grab",
               userSelect: "none",
+              zIndex: draggingRiskId === risk.id ? 50 : 10,
             }}
             onMouseDown={(e) => handleMouseDown(e, risk.id)}
             onMouseEnter={() => setHoveredRiskId(risk.id)}
@@ -108,7 +117,7 @@ export default function RiskMapCanvas({
                 width: `${risk.radius * 2}px`,
                 height: `${risk.radius * 2}px`,
                 backgroundColor: risk.color,
-                opacity: draggingRiskId === risk.id ? 0.8 : 0.7,
+                opacity: draggingRiskId === risk.id ? 0.9 : 0.7,
                 boxShadow: `0 4px 12px ${risk.color}40`,
               }}
             />
@@ -116,7 +125,10 @@ export default function RiskMapCanvas({
             {/* Delete Button (visible on hover) */}
             {hoveredRiskId === risk.id && (
               <button
-                onClick={() => onRiskDelete(risk.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRiskDelete(risk.id);
+                }}
                 className="absolute -top-3 -right-3 bg-destructive text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
                 title="Remover risco"
               >

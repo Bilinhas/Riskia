@@ -92,7 +92,9 @@ export default function RiskMapEditor() {
         height: floorPlanResponse.height,
       });
 
-      setMapId(mapResult.insertId as number);
+      const newMapId = mapResult.insertId as number;
+      setMapId(newMapId);
+      console.log("Map created with ID:", newMapId);
 
       // Add identified risks to the map with distributed positions
       const newRisks: Risk[] = [];
@@ -101,7 +103,7 @@ export default function RiskMapEditor() {
         const position = generateDistributedPosition(i, identifiedRisks.length);
 
         const riskData = {
-          mapId: mapResult.insertId as number,
+          mapId: newMapId,
           type: risk.type,
           severity: risk.severity,
           label: risk.label,
@@ -131,7 +133,8 @@ export default function RiskMapEditor() {
 
   const handleAddRisk = async (riskData: Omit<Risk, "id">) => {
     if (!mapId) {
-      toast.error("Mapa não foi criado");
+      console.error("MapId is null:", mapId);
+      toast.error("Mapa não foi criado. Por favor, gere um mapa primeiro.");
       return;
     }
 
@@ -141,14 +144,12 @@ export default function RiskMapEditor() {
         mapId,
       });
 
-      setRisks([
-        ...risks,
-        {
-          id: result.insertId as number,
-          ...riskData,
-        },
-      ]);
+      const newRisk: Risk = {
+        id: result.insertId as number,
+        ...riskData,
+      };
 
+      setRisks((prevRisks) => [...prevRisks, newRisk]);
       setShowRiskForm(false);
       toast.success("Risco adicionado com sucesso!");
     } catch (error) {
@@ -160,7 +161,7 @@ export default function RiskMapEditor() {
   const handleDeleteRisk = async (riskId: number) => {
     try {
       await deleteRiskMutation.mutateAsync({ riskId });
-      setRisks(risks.filter((r) => r.id !== riskId));
+      setRisks((prevRisks) => prevRisks.filter((r) => r.id !== riskId));
       toast.success("Risco removido com sucesso!");
     } catch (error) {
       console.error("Error deleting risk:", error);
@@ -169,8 +170,8 @@ export default function RiskMapEditor() {
   };
 
   const handleUpdateRiskPosition = (riskId: number, x: number, y: number) => {
-    setRisks(
-      risks.map((r) =>
+    setRisks((prevRisks) =>
+      prevRisks.map((r) =>
         r.id === riskId ? { ...r, xPosition: x, yPosition: y } : r
       )
     );

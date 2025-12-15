@@ -69,3 +69,9 @@
 - [x] Corrigir funcionalidade de adicionar riscos manualmente
 - [x] Melhorar distribuição de riscos no mapa
 - [x] Validar form de adição de riscos
+
+## Bugs Críticos - Segunda Rodada
+
+- [x] Corrigir drag-and-drop que agrupa riscos ao arrastar
+- [x] Corrigir deleção que remove todos os riscos ao invés de um
+- [x] Corrigir persistência de mapId e validação "mapa não foi criado"
