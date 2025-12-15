@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import { X } from "lucide-react";
 
 interface Risk {
@@ -28,46 +28,82 @@ export default function RiskMapCanvas({
 }: RiskMapCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [draggingRiskId, setDraggingRiskId] = useState<number | null>(null);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 });
   const [hoveredRiskId, setHoveredRiskId] = useState<number | null>(null);
+  const dragStateRef = useRef<{
+    riskId: number | null;
+    startX: number;
+    startY: number;
+    riskStartX: number;
+    riskStartY: number;
+  }>({
+    riskId: null,
+    startX: 0,
+    startY: 0,
+    riskStartX: 0,
+    riskStartY: 0,
+  });
 
-  const handleMouseDown = (e: React.MouseEvent, riskId: number) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    const risk = risks.find((r) => r.id === riskId);
-    if (!risk) return;
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent, riskId: number) => {
+      e.preventDefault();
+      e.stopPropagation();
 
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
+      const risk = risks.find((r) => r.id === riskId);
+      if (!risk) return;
 
-    // Calcular o offset do mouse em relação ao centro do círculo
-    const offsetX = e.clientX - rect.left - risk.xPosition;
-    const offsetY = e.clientY - rect.top - risk.yPosition;
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
 
-    setDraggingRiskId(riskId);
-    setDragOffset({ x: offsetX, y: offsetY });
-  };
+      // Armazenar estado do drag
+      dragStateRef.current = {
+        riskId,
+        startX: e.clientX,
+        startY: e.clientY,
+        riskStartX: risk.xPosition,
+        riskStartY: risk.yPosition,
+      };
+
+      setDraggingRiskId(riskId);
+      setDragStartPos({ x: e.clientX, y: e.clientY });
+    },
+    [risks]
+  );
 
   useEffect(() => {
     if (draggingRiskId === null) return;
 
     const handleMouseMove = (e: MouseEvent) => {
+      const state = dragStateRef.current;
+      if (state.riskId === null) return;
+
       const rect = containerRef.current?.getBoundingClientRect();
       if (!rect) return;
 
-      // Calcular nova posição subtraindo o offset
-      let x = e.clientX - rect.left - dragOffset.x;
-      let y = e.clientY - rect.top - dragOffset.y;
+      // Calcular diferença de movimento
+      const deltaX = e.clientX - state.startX;
+      const deltaY = e.clientY - state.startY;
+
+      // Calcular nova posição baseada na posição inicial do risco
+      let newX = state.riskStartX + deltaX;
+      let newY = state.riskStartY + deltaY;
 
       // Limitar dentro dos limites do container
-      x = Math.max(0, Math.min(x, rect.width));
-      y = Math.max(0, Math.min(y, rect.height));
+      newX = Math.max(0, Math.min(newX, rect.width));
+      newY = Math.max(0, Math.min(newY, rect.height));
 
-      onRiskPositionChange(draggingRiskId, x, y);
+      // Chamar callback apenas para o risco que está sendo arrastado
+      onRiskPositionChange(state.riskId, newX, newY);
     };
 
     const handleMouseUp = () => {
+      dragStateRef.current = {
+        riskId: null,
+        startX: 0,
+        startY: 0,
+        riskStartX: 0,
+        riskStartY: 0,
+      };
       setDraggingRiskId(null);
     };
 
@@ -78,7 +114,7 @@ export default function RiskMapCanvas({
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [draggingRiskId, dragOffset, onRiskPositionChange]);
+  }, [draggingRiskId, onRiskPositionChange]);
 
   return (
     <div

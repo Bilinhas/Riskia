@@ -80,3 +80,8 @@
 ## Bugs Críticos - Terceira Rodada
 
 - [x] Corrigir erro de chaves duplicadas em renderização de riscos (risk-0 duplicado)
+
+
+## Bugs Críticos - Quarta Rodada
+
+- [x] Corrigir drag-and-drop que move todos os círculos ao invés de apenas o selecionado
