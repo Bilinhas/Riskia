@@ -10,6 +10,8 @@ import RiskMapCanvas from "@/components/RiskMapCanvas";
 import RiskLegend from "@/components/RiskLegend";
 import Header from "@/components/Header";
 import { useLocation, useRoute } from "wouter";
+import { exportMapToPDF } from "@/utils/pdfExport";
+import { Download } from "lucide-react";
 
 interface Risk {
   id: number;
@@ -251,6 +253,33 @@ export default function RiskMapEditor() {
     // Salvar com debounce
     debouncedSavePosition(riskId, x, y);
   };
+  
+  const handleExportPDF = async () => {
+    if (!floorPlanSvg || !mapId) {
+      toast.error("Gere um mapa antes de exportar");
+      return;
+    }
+    
+    try {
+      setIsLoading(true);
+      const timestamp = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
+      const filename = `mapa-risco-${mapId}-${timestamp}.pdf`;
+      
+      await exportMapToPDF('map-canvas-container', {
+        title: `Mapa de Risco Ocupacional - ID ${mapId}`,
+        description: description || 'Sem descrição',
+        createdAt: new Date(),
+        risks,
+      }, filename);
+      
+      toast.success("PDF exportado com sucesso!");
+    } catch (error) {
+      console.error("Erro ao exportar PDF:", error);
+      toast.error("Erro ao exportar PDF");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -263,13 +292,26 @@ export default function RiskMapEditor() {
       )}
       <div className="flex-1 p-6">
         <div className="max-w-7xl mx-auto">
-          <div className="mb-8">
-            <h1 className="text-4xl font-light text-foreground mb-2">
-              Mapa de Risco Ocupacional
-            </h1>
-            <p className="text-muted-foreground">
-              Gere mapas de risco inteligentes com IA
-            </p>
+          <div className="mb-8 flex items-start justify-between">
+            <div>
+              <h1 className="text-4xl font-light text-foreground mb-2">
+                Mapa de Risco Ocupacional
+              </h1>
+              <p className="text-muted-foreground">
+                Gere mapas de risco inteligentes com IA
+              </p>
+            </div>
+            {floorPlanSvg && (
+              <Button
+                onClick={handleExportPDF}
+                disabled={isLoading}
+                className="gap-2"
+                variant="outline"
+              >
+                <Download className="w-4 h-4" />
+                Exportar PDF
+              </Button>
+            )}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -325,7 +367,7 @@ export default function RiskMapEditor() {
             </div>
 
             {/* Map and Legend Section */}
-            <div className="lg:col-span-2">
+            <div className="lg:col-span-2" id="map-canvas-container">
               {floorPlanSvg ? (
                 <div className="space-y-6">
                   <Card className="p-6 bg-card">

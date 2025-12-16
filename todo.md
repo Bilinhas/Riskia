@@ -111,3 +111,12 @@
 - [x] Integrar salvamento automático no RiskMapCanvas
 - [x] Adicionar feedback visual de salvamento
 - [x] Testar persistência de posições
+
+
+## Nova Funcionalidade - Exportação em PDF
+
+- [x] Instalar dependências html2canvas e jsPDF
+- [x] Criar função de captura de mapa
+- [x] Implementar geração de PDF com planta e riscos
+- [x] Adicionar botão de exportação na interface
+- [x] Testar qualidade e tamanho do PDF
