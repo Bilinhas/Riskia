@@ -27,22 +27,33 @@ function sanitizeElement(element: HTMLElement): HTMLElement {
   const clone = element.cloneNode(true) as HTMLElement;
   
   // Remove todas as classes que possam conter OKLCH
-  clone.className = '';
+  try {
+    clone.className = '';
+  } catch (e) {
+    // SVG elements tem className read-only, ignora erro
+  }
   clone.style.cssText = '';
   
   // Processa elemento e todos os filhos recursivamente
   const processElement = (el: Element) => {
-    const htmlEl = el as HTMLElement;
+    // Verifica se eh um elemento SVG
+    const isSVG = el.namespaceURI === 'http://www.w3.org/2000/svg';
     
-    // Remove classes
-    htmlEl.className = '';
+    // Remove classes apenas se nao for SVG
+    if (!isSVG) {
+      try {
+        (el as HTMLElement).className = '';
+      } catch (e) {
+        // Ignora erro se nao conseguir remover classe
+      }
+    }
     
     // Remove atributos de estilo inline que contenham oklch
-    if (htmlEl.style.cssText) {
-      let cssText = htmlEl.style.cssText;
+    if ((el as HTMLElement).style && (el as HTMLElement).style.cssText) {
+      let cssText = (el as HTMLElement).style.cssText;
       // Remove qualquer propriedade que contenha oklch
       cssText = cssText.replace(/[^;]*oklch[^;]*;?/gi, '');
-      htmlEl.style.cssText = cssText;
+      (el as HTMLElement).style.cssText = cssText;
     }
     
     // Processa filhos
@@ -51,7 +62,7 @@ function sanitizeElement(element: HTMLElement): HTMLElement {
   
   processElement(clone);
   
-  // Adiciona estilos básicos para garantir legibilidade
+  // Adiciona estilos basicos para garantir legibilidade
   clone.style.backgroundColor = '#ffffff';
   clone.style.color = '#000000';
   clone.style.fontFamily = 'Arial, sans-serif';
@@ -70,13 +81,13 @@ export async function exportMapToPDF(
   try {
     const element = document.getElementById(mapContainerId);
     if (!element) {
-      throw new Error('Elemento do mapa não encontrado');
+      throw new Error('Elemento do mapa nao encontrado');
     }
 
     // Sanitizar elemento para remover cores OKLCH
     const sanitizedElement = sanitizeElement(element);
     
-    // Criar container temporário
+    // Criar container temporario
     const tempContainer = document.createElement('div');
     tempContainer.style.position = 'absolute';
     tempContainer.style.left = '-9999px';
@@ -85,7 +96,7 @@ export async function exportMapToPDF(
     document.body.appendChild(tempContainer);
 
     try {
-      // Capturar o elemento como imagem com configurações otimizadas
+      // Capturar o elemento como imagem com configuracoes otimizadas
       const canvas = await html2canvas(sanitizedElement, {
         scale: 2,
         useCORS: true,
@@ -111,7 +122,7 @@ export async function exportMapToPDF(
 
       let yPosition = 10;
 
-      // Adicionar título
+      // Adicionar titulo
       pdf.setFontSize(18);
       pdf.text(mapData.title, 10, yPosition);
       yPosition += 10;
@@ -127,7 +138,7 @@ export async function exportMapToPDF(
       pdf.text(`Data: ${formattedDate}`, 10, yPosition);
       yPosition += 8;
 
-      // Adicionar descrição
+      // Adicionar descricao
       if (mapData.description) {
         pdf.setFontSize(10);
         pdf.setTextColor(0);
@@ -150,12 +161,12 @@ export async function exportMapToPDF(
       pdf.addImage(imgData, 'PNG', xPosition, yPosition, finalImgWidth, finalImgHeight);
       yPosition += finalImgHeight + 10;
 
-      // Adicionar nova página para legenda se necessário
+      // Adicionar nova pagina para legenda se necessario
       if (mapData.risks.length > 0) {
         pdf.addPage();
         yPosition = 10;
 
-        // Título da legenda
+        // Titulo da legenda
         pdf.setFontSize(14);
         pdf.text('Legenda de Riscos', 10, yPosition);
         yPosition += 10;
@@ -163,13 +174,13 @@ export async function exportMapToPDF(
         // Adicionar cada risco na legenda
         pdf.setFontSize(10);
         mapData.risks.forEach((risk) => {
-          // Desenhar círculo de cor
+          // Desenhar circulo de cor
           const circleRadius = 3;
           const rgbColor = hexToRgb(risk.color);
           pdf.setFillColor(rgbColor.r, rgbColor.g, rgbColor.b);
           pdf.circle(15, yPosition + 1, circleRadius, 'F');
 
-          // Adicionar informações do risco
+          // Adicionar informacoes do risco
           pdf.setTextColor(0);
           pdf.text(`${risk.label}`, 22, yPosition);
           yPosition += 5;
@@ -188,7 +199,7 @@ export async function exportMapToPDF(
           yPosition += 2;
           pdf.setFontSize(10);
 
-          // Verificar se precisa de nova página
+          // Verificar se precisa de nova pagina
           if (yPosition > 270) {
             pdf.addPage();
             yPosition = 10;
@@ -199,7 +210,7 @@ export async function exportMapToPDF(
       // Salvar PDF
       pdf.save(filename);
     } finally {
-      // Remover container temporário
+      // Remover container temporario
       document.body.removeChild(tempContainer);
     }
   } catch (error) {
