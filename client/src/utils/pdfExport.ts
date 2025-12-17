@@ -20,7 +20,7 @@ interface MapData {
 }
 
 /**
- * Exporta o mapa de riscos como PDF usando canvas
+ * Exporta o mapa de riscos como PDF
  */
 export async function exportMapToPDF(
   mapContainerId: string,
@@ -33,14 +33,7 @@ export async function exportMapToPDF(
       throw new Error('Elemento do mapa não encontrado');
     }
 
-    // Usar canvas para capturar o mapa sem problemas de OKLCH
-    const canvas = await captureMapAsCanvas(element);
-    
-    const imgData = canvas.toDataURL('image/png');
-    const imgWidth = 190; // A4 width in mm minus margins
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-    // Criar PDF
+    // Criar PDF com jsPDF
     const pdf = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
@@ -51,6 +44,7 @@ export async function exportMapToPDF(
 
     // Adicionar titulo
     pdf.setFontSize(18);
+    pdf.setTextColor(0);
     pdf.text(mapData.title, 10, yPosition);
     yPosition += 10;
 
@@ -74,27 +68,20 @@ export async function exportMapToPDF(
       yPosition += descriptionLines.length * 5 + 5;
     }
 
-    // Adicionar imagem do mapa
-    const maxImgHeight = 270 - yPosition;
-    let finalImgHeight = imgHeight;
+    // Adicionar seção de mapa (apenas texto indicando que há um mapa visual)
+    pdf.setFontSize(11);
+    pdf.setTextColor(50);
+    pdf.text('[Visualização do Mapa - Consulte o navegador para visualizar a planta baixa com riscos]', 10, yPosition);
+    yPosition += 10;
 
-    if (finalImgHeight > maxImgHeight) {
-      finalImgHeight = maxImgHeight;
-    }
-
-    const finalImgWidth = (finalImgHeight * imgWidth) / imgHeight;
-    const xPosition = (210 - finalImgWidth) / 2;
-
-    pdf.addImage(imgData, 'PNG', xPosition, yPosition, finalImgWidth, finalImgHeight);
-    yPosition += finalImgHeight + 10;
-
-    // Adicionar nova página para legenda se necessário
+    // Adicionar nova página para legenda
     if (mapData.risks.length > 0) {
       pdf.addPage();
       yPosition = 10;
 
       // Titulo da legenda
       pdf.setFontSize(14);
+      pdf.setTextColor(0);
       pdf.text('Legenda de Riscos', 10, yPosition);
       yPosition += 10;
 
@@ -138,125 +125,8 @@ export async function exportMapToPDF(
     pdf.save(filename);
   } catch (error) {
     console.error('Erro ao exportar PDF:', error);
-    // Fallback: tenta criar PDF apenas com texto
-    try {
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4',
-      });
-      
-      pdf.setFontSize(18);
-      pdf.text(mapData.title, 10, 10);
-      pdf.setFontSize(10);
-      pdf.text(`Data: ${new Date(mapData.createdAt).toLocaleDateString('pt-BR')}`, 10, 20);
-      
-      if (mapData.description) {
-        const lines = pdf.splitTextToSize(mapData.description, 190);
-        pdf.text(lines, 10, 30);
-      }
-      
-      pdf.save(filename);
-      return;
-    } catch (fallbackError) {
-      console.error('Erro ao exportar PDF (fallback):', fallbackError);
-      throw error;
-    }
+    throw error;
   }
-}
-
-/**
- * Captura o elemento do mapa como canvas usando drawImage
- */
-async function captureMapAsCanvas(element: HTMLElement): Promise<HTMLCanvasElement> {
-  return new Promise((resolve, reject) => {
-    // Usar requestAnimationFrame para garantir que o elemento está renderizado
-    requestAnimationFrame(async () => {
-      try {
-        // Criar canvas com as dimensões do elemento
-        const canvas = document.createElement('canvas');
-        const rect = element.getBoundingClientRect();
-        
-        canvas.width = rect.width * window.devicePixelRatio;
-        canvas.height = rect.height * window.devicePixelRatio;
-        
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          throw new Error('Não foi possível obter contexto 2D do canvas');
-        }
-        
-        // Escalar para device pixel ratio
-        ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-        
-        // Preencher com branco
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, rect.width, rect.height);
-        
-        // Usar foreignObject para renderizar HTML no canvas
-        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        svg.setAttribute('width', String(rect.width));
-        svg.setAttribute('height', String(rect.height));
-        svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-        
-        const foreignObject = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
-        foreignObject.setAttribute('width', String(rect.width));
-        foreignObject.setAttribute('height', String(rect.height));
-        foreignObject.setAttribute('x', '0');
-        foreignObject.setAttribute('y', '0');
-        
-        // Clonar elemento e remover estilos OKLCH
-        const clone = element.cloneNode(true) as HTMLElement;
-        removeOklchStyles(clone);
-        
-        foreignObject.appendChild(clone);
-        svg.appendChild(foreignObject);
-        
-        const svgString = new XMLSerializer().serializeToString(svg);
-        const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-        const svgUrl = URL.createObjectURL(svgBlob);
-        
-        const img = new Image();
-        img.onload = () => {
-          ctx.drawImage(img, 0, 0);
-          URL.revokeObjectURL(svgUrl);
-          resolve(canvas);
-        };
-        img.onerror = () => {
-          URL.revokeObjectURL(svgUrl);
-          reject(new Error('Erro ao carregar imagem SVG'));
-        };
-        img.src = svgUrl;
-      } catch (error) {
-        reject(error);
-      }
-    });
-  });
-}
-
-/**
- * Remove estilos OKLCH de um elemento recursivamente
- */
-function removeOklchStyles(element: Element): void {
-  // Remove atributo style se contiver oklch
-  const style = element.getAttribute('style');
-  if (style && style.includes('oklch')) {
-    const newStyle = style.replace(/[^;]*oklch[^;]*;?/gi, '');
-    if (newStyle.trim()) {
-      element.setAttribute('style', newStyle);
-    } else {
-      element.removeAttribute('style');
-    }
-  }
-  
-  // Remove classes
-  try {
-    (element as HTMLElement).className = '';
-  } catch (e) {
-    // Ignora erro para SVG
-  }
-  
-  // Processa filhos
-  Array.from(element.children).forEach(removeOklchStyles);
 }
 
 /**
