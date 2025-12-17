@@ -33,8 +33,21 @@ export async function exportMapToPDF(
       throw new Error('Elemento do mapa não encontrado');
     }
 
+    console.log('Iniciando exportação de PDF...');
+
     // Capturar o mapa como imagem
-    const mapImage = await captureMapAsImage(element);
+    let mapImage: { data: string; width: number; height: number } | null = null;
+    try {
+      console.log('Tentando capturar mapa como imagem...');
+      mapImage = await captureMapAsImage(element);
+      if (mapImage) {
+        console.log('Mapa capturado com sucesso:', mapImage.width, 'x', mapImage.height);
+      } else {
+        console.warn('Captura de mapa retornou null');
+      }
+    } catch (captureError) {
+      console.error('Erro ao capturar mapa:', captureError);
+    }
 
     // Criar PDF com jsPDF
     const pdf = new jsPDF({
@@ -71,22 +84,31 @@ export async function exportMapToPDF(
       yPosition += descriptionLines.length * 5 + 5;
     }
 
-    // Adicionar imagem do mapa
-    if (mapImage) {
-      const imgWidth = 190;
-      const imgHeight = (mapImage.height * imgWidth) / mapImage.width;
-      const maxImgHeight = 270 - yPosition;
+    // Adicionar imagem do mapa se disponível
+    if (mapImage && mapImage.data) {
+      try {
+        console.log('Adicionando imagem ao PDF...');
+        const imgWidth = 190;
+        const imgHeight = (mapImage.height * imgWidth) / mapImage.width;
+        const maxImgHeight = 270 - yPosition;
 
-      let finalImgHeight = imgHeight;
-      if (finalImgHeight > maxImgHeight) {
-        finalImgHeight = maxImgHeight;
+        let finalImgHeight = imgHeight;
+        if (finalImgHeight > maxImgHeight) {
+          finalImgHeight = maxImgHeight;
+        }
+
+        const finalImgWidth = (finalImgHeight * mapImage.width) / mapImage.height;
+        const xPosition = (210 - finalImgWidth) / 2;
+
+        pdf.addImage(mapImage.data, 'PNG', xPosition, yPosition, finalImgWidth, finalImgHeight);
+        yPosition += finalImgHeight + 10;
+        console.log('Imagem adicionada com sucesso');
+      } catch (imgError) {
+        console.error('Erro ao adicionar imagem ao PDF:', imgError);
+        // Continuar sem imagem
       }
-
-      const finalImgWidth = (finalImgHeight * mapImage.width) / mapImage.height;
-      const xPosition = (210 - finalImgWidth) / 2;
-
-      pdf.addImage(mapImage.data, 'PNG', xPosition, yPosition, finalImgWidth, finalImgHeight);
-      yPosition += finalImgHeight + 10;
+    } else {
+      console.warn('Nenhuma imagem disponível para adicionar ao PDF');
     }
 
     // Adicionar nova página para legenda se necessário
@@ -137,7 +159,9 @@ export async function exportMapToPDF(
     }
 
     // Salvar PDF
+    console.log('Salvando PDF...');
     pdf.save(filename);
+    console.log('PDF salvo com sucesso');
   } catch (error) {
     console.error('Erro ao exportar PDF:', error);
     throw error;
@@ -151,29 +175,75 @@ async function captureMapAsImage(
   element: HTMLElement
 ): Promise<{ data: string; width: number; height: number } | null> {
   try {
-    // Usar html2canvas com configurações que evitam CORS
+    console.log('Importando html2canvas...');
     const { default: html2canvas } = await import('html2canvas');
 
-    const canvas = await html2canvas(element, {
+    // Clonar elemento e remover classes Tailwind
+    const clonedElement = element.cloneNode(true) as HTMLElement;
+    removeAllClasses(clonedElement);
+    
+    // Remover atributos style que possam conter OKLCH
+    removeOklchStyles(clonedElement);
+
+    console.log('Elemento a capturar:', clonedElement);
+    console.log('Dimensões do elemento:', clonedElement.scrollWidth, 'x', clonedElement.scrollHeight);
+
+    const canvas = await html2canvas(clonedElement, {
       backgroundColor: '#ffffff',
       scale: 2,
       useCORS: false,
       allowTaint: true,
-      logging: false,
-      windowHeight: element.scrollHeight,
-      windowWidth: element.scrollWidth,
+      logging: true,
+      windowHeight: clonedElement.scrollHeight,
+      windowWidth: clonedElement.scrollWidth,
     });
 
+    console.log('Canvas criado:', canvas.width, 'x', canvas.height);
+
     const imgData = canvas.toDataURL('image/png');
+    console.log('Imagem convertida para data URL, tamanho:', imgData.length);
+
     return {
       data: imgData,
       width: canvas.width,
       height: canvas.height,
     };
   } catch (error) {
-    console.warn('Erro ao capturar mapa como imagem:', error);
+    console.error('Erro ao capturar mapa como imagem:', error);
     return null;
   }
+}
+
+/**
+ * Remove todas as classes de um elemento e seus filhos
+ */
+function removeAllClasses(element: HTMLElement): void {
+  element.removeAttribute('class');
+  element.removeAttribute('style');
+  
+  const children = element.querySelectorAll('*');
+  children.forEach((child) => {
+    (child as HTMLElement).removeAttribute('class');
+    (child as HTMLElement).removeAttribute('style');
+  });
+}
+
+/**
+ * Remove estilos OKLCH de um elemento e seus filhos
+ */
+function removeOklchStyles(element: HTMLElement): void {
+  const removeOklchFromElement = (el: HTMLElement) => {
+    const style = el.getAttribute('style');
+    if (style && style.includes('oklch')) {
+      el.removeAttribute('style');
+    }
+  };
+
+  removeOklchFromElement(element);
+  const children = element.querySelectorAll('*');
+  children.forEach((child) => {
+    removeOklchFromElement(child as HTMLElement);
+  });
 }
 
 /**
