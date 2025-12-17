@@ -21,55 +21,40 @@ interface MapData {
 }
 
 /**
- * Converte cores OKLCH para RGB (suportadas pelo html2canvas)
- */
-function convertOklchToRgb(oklchColor: string): string {
-  // Se não for OKLCH, retorna a cor original
-  if (!oklchColor.includes('oklch')) {
-    return oklchColor;
-  }
-
-  // Extrai valores OKLCH
-  const match = oklchColor.match(/oklch\(([\d.]+)\s+([\d.]+)\s+([\d.]+)\)/);
-  if (!match) {
-    return '#ffffff'; // Fallback para branco
-  }
-
-  const L = parseFloat(match[1]);
-  const C = parseFloat(match[2]);
-  const H = parseFloat(match[3]);
-
-  // Converte OKLCH para RGB (implementação simplificada)
-  // Para cores de fundo, usa tons neutros
-  const brightness = Math.round(L * 255);
-  return `rgb(${brightness}, ${brightness}, ${brightness})`;
-}
-
-/**
  * Remove ou substitui cores OKLCH em um elemento
  */
 function sanitizeElement(element: HTMLElement): HTMLElement {
   const clone = element.cloneNode(true) as HTMLElement;
-  const style = window.getComputedStyle(clone);
   
-  // Substitui cores OKLCH por RGB
-  if (style.backgroundColor && style.backgroundColor.includes('oklch')) {
-    clone.style.backgroundColor = convertOklchToRgb(style.backgroundColor);
-  }
-  if (style.color && style.color.includes('oklch')) {
-    clone.style.color = convertOklchToRgb(style.color);
-  }
-
-  // Processa elementos filhos
-  clone.querySelectorAll('*').forEach((child) => {
-    const childStyle = window.getComputedStyle(child as HTMLElement);
-    if (childStyle.backgroundColor && childStyle.backgroundColor.includes('oklch')) {
-      (child as HTMLElement).style.backgroundColor = convertOklchToRgb(childStyle.backgroundColor);
+  // Remove todas as classes que possam conter OKLCH
+  clone.className = '';
+  clone.style.cssText = '';
+  
+  // Processa elemento e todos os filhos recursivamente
+  const processElement = (el: Element) => {
+    const htmlEl = el as HTMLElement;
+    
+    // Remove classes
+    htmlEl.className = '';
+    
+    // Remove atributos de estilo inline que contenham oklch
+    if (htmlEl.style.cssText) {
+      let cssText = htmlEl.style.cssText;
+      // Remove qualquer propriedade que contenha oklch
+      cssText = cssText.replace(/[^;]*oklch[^;]*;?/gi, '');
+      htmlEl.style.cssText = cssText;
     }
-    if (childStyle.color && childStyle.color.includes('oklch')) {
-      (child as HTMLElement).style.color = convertOklchToRgb(childStyle.color);
-    }
-  });
+    
+    // Processa filhos
+    Array.from(el.children).forEach(processElement);
+  };
+  
+  processElement(clone);
+  
+  // Adiciona estilos básicos para garantir legibilidade
+  clone.style.backgroundColor = '#ffffff';
+  clone.style.color = '#000000';
+  clone.style.fontFamily = 'Arial, sans-serif';
 
   return clone;
 }
@@ -100,12 +85,17 @@ export async function exportMapToPDF(
     document.body.appendChild(tempContainer);
 
     try {
-      // Capturar o elemento como imagem
+      // Capturar o elemento como imagem com configurações otimizadas
       const canvas = await html2canvas(sanitizedElement, {
         scale: 2,
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#ffffff',
+        logging: false,
+        ignoreElements: (element) => {
+          // Ignora scripts e estilos
+          return element.tagName === 'SCRIPT' || element.tagName === 'STYLE';
+        },
       });
 
       const imgData = canvas.toDataURL('image/png');
@@ -214,7 +204,30 @@ export async function exportMapToPDF(
     }
   } catch (error) {
     console.error('Erro ao exportar PDF:', error);
-    throw error;
+    // Fallback: tenta criar PDF apenas com texto
+    try {
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+      
+      pdf.setFontSize(18);
+      pdf.text(mapData.title, 10, 10);
+      pdf.setFontSize(10);
+      pdf.text(`Data: ${new Date(mapData.createdAt).toLocaleDateString('pt-BR')}`, 10, 20);
+      
+      if (mapData.description) {
+        const lines = pdf.splitTextToSize(mapData.description, 190);
+        pdf.text(lines, 10, 30);
+      }
+      
+      pdf.save(filename);
+      return;
+    } catch (fallbackError) {
+      console.error('Erro ao exportar PDF (fallback):', fallbackError);
+      throw error;
+    }
   }
 }
 
