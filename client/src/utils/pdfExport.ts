@@ -48,12 +48,17 @@ function sanitizeElement(element: HTMLElement): HTMLElement {
       }
     }
     
-    // Remove atributos de estilo inline que contenham oklch
-    if ((el as HTMLElement).style && (el as HTMLElement).style.cssText) {
-      let cssText = (el as HTMLElement).style.cssText;
-      // Remove qualquer propriedade que contenha oklch
-      cssText = cssText.replace(/[^;]*oklch[^;]*;?/gi, '');
-      (el as HTMLElement).style.cssText = cssText;
+    // Para SVG, remove completamente o atributo style
+    if (isSVG) {
+      el.removeAttribute('style');
+    } else {
+      // Para HTML, remove atributos de estilo inline que contenham oklch
+      if ((el as HTMLElement).style && (el as HTMLElement).style.cssText) {
+        let cssText = (el as HTMLElement).style.cssText;
+        // Remove qualquer propriedade que contenha oklch
+        cssText = cssText.replace(/[^;]*oklch[^;]*;?/gi, '');
+        (el as HTMLElement).style.cssText = cssText;
+      }
     }
     
     // Processa filhos
