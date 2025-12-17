@@ -120,3 +120,8 @@
 - [x] Implementar geração de PDF com planta e riscos
 - [x] Adicionar botão de exportação na interface
 - [x] Testar qualidade e tamanho do PDF
+
+
+## Bugs - Exportação PDF
+
+- [x] Corrigir erro de cores OKLCH não suportadas pelo html2canvas
