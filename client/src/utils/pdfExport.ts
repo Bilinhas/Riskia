@@ -33,6 +33,9 @@ export async function exportMapToPDF(
       throw new Error('Elemento do mapa não encontrado');
     }
 
+    // Capturar o mapa como imagem
+    const mapImage = await captureMapAsImage(element);
+
     // Criar PDF com jsPDF
     const pdf = new jsPDF({
       orientation: 'portrait',
@@ -68,13 +71,25 @@ export async function exportMapToPDF(
       yPosition += descriptionLines.length * 5 + 5;
     }
 
-    // Adicionar seção de mapa (apenas texto indicando que há um mapa visual)
-    pdf.setFontSize(11);
-    pdf.setTextColor(50);
-    pdf.text('[Visualização do Mapa - Consulte o navegador para visualizar a planta baixa com riscos]', 10, yPosition);
-    yPosition += 10;
+    // Adicionar imagem do mapa
+    if (mapImage) {
+      const imgWidth = 190;
+      const imgHeight = (mapImage.height * imgWidth) / mapImage.width;
+      const maxImgHeight = 270 - yPosition;
 
-    // Adicionar nova página para legenda
+      let finalImgHeight = imgHeight;
+      if (finalImgHeight > maxImgHeight) {
+        finalImgHeight = maxImgHeight;
+      }
+
+      const finalImgWidth = (finalImgHeight * mapImage.width) / mapImage.height;
+      const xPosition = (210 - finalImgWidth) / 2;
+
+      pdf.addImage(mapImage.data, 'PNG', xPosition, yPosition, finalImgWidth, finalImgHeight);
+      yPosition += finalImgHeight + 10;
+    }
+
+    // Adicionar nova página para legenda se necessário
     if (mapData.risks.length > 0) {
       pdf.addPage();
       yPosition = 10;
@@ -126,6 +141,38 @@ export async function exportMapToPDF(
   } catch (error) {
     console.error('Erro ao exportar PDF:', error);
     throw error;
+  }
+}
+
+/**
+ * Captura o mapa como imagem PNG
+ */
+async function captureMapAsImage(
+  element: HTMLElement
+): Promise<{ data: string; width: number; height: number } | null> {
+  try {
+    // Usar html2canvas com configurações que evitam CORS
+    const { default: html2canvas } = await import('html2canvas');
+
+    const canvas = await html2canvas(element, {
+      backgroundColor: '#ffffff',
+      scale: 2,
+      useCORS: false,
+      allowTaint: true,
+      logging: false,
+      windowHeight: element.scrollHeight,
+      windowWidth: element.scrollWidth,
+    });
+
+    const imgData = canvas.toDataURL('image/png');
+    return {
+      data: imgData,
+      width: canvas.width,
+      height: canvas.height,
+    };
+  } catch (error) {
+    console.warn('Erro ao capturar mapa como imagem:', error);
+    return null;
   }
 }
 
