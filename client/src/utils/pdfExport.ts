@@ -1,4 +1,3 @@
-import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
 interface Risk {
@@ -21,62 +20,7 @@ interface MapData {
 }
 
 /**
- * Remove ou substitui cores OKLCH em um elemento
- */
-function sanitizeElement(element: HTMLElement): HTMLElement {
-  const clone = element.cloneNode(true) as HTMLElement;
-  
-  // Remove todas as classes que possam conter OKLCH
-  try {
-    clone.className = '';
-  } catch (e) {
-    // SVG elements tem className read-only, ignora erro
-  }
-  clone.style.cssText = '';
-  
-  // Processa elemento e todos os filhos recursivamente
-  const processElement = (el: Element) => {
-    // Verifica se eh um elemento SVG
-    const isSVG = el.namespaceURI === 'http://www.w3.org/2000/svg';
-    
-    // Remove classes apenas se nao for SVG
-    if (!isSVG) {
-      try {
-        (el as HTMLElement).className = '';
-      } catch (e) {
-        // Ignora erro se nao conseguir remover classe
-      }
-    }
-    
-    // Para SVG, remove completamente o atributo style
-    if (isSVG) {
-      el.removeAttribute('style');
-    } else {
-      // Para HTML, remove atributos de estilo inline que contenham oklch
-      if ((el as HTMLElement).style && (el as HTMLElement).style.cssText) {
-        let cssText = (el as HTMLElement).style.cssText;
-        // Remove qualquer propriedade que contenha oklch
-        cssText = cssText.replace(/[^;]*oklch[^;]*;?/gi, '');
-        (el as HTMLElement).style.cssText = cssText;
-      }
-    }
-    
-    // Processa filhos
-    Array.from(el.children).forEach(processElement);
-  };
-  
-  processElement(clone);
-  
-  // Adiciona estilos basicos para garantir legibilidade
-  clone.style.backgroundColor = '#ffffff';
-  clone.style.color = '#000000';
-  clone.style.fontFamily = 'Arial, sans-serif';
-
-  return clone;
-}
-
-/**
- * Exporta o mapa de riscos como PDF
+ * Exporta o mapa de riscos como PDF usando canvas
  */
 export async function exportMapToPDF(
   mapContainerId: string,
@@ -86,138 +30,112 @@ export async function exportMapToPDF(
   try {
     const element = document.getElementById(mapContainerId);
     if (!element) {
-      throw new Error('Elemento do mapa nao encontrado');
+      throw new Error('Elemento do mapa não encontrado');
     }
 
-    // Sanitizar elemento para remover cores OKLCH
-    const sanitizedElement = sanitizeElement(element);
+    // Usar canvas para capturar o mapa sem problemas de OKLCH
+    const canvas = await captureMapAsCanvas(element);
     
-    // Criar container temporario
-    const tempContainer = document.createElement('div');
-    tempContainer.style.position = 'absolute';
-    tempContainer.style.left = '-9999px';
-    tempContainer.style.top = '-9999px';
-    tempContainer.appendChild(sanitizedElement);
-    document.body.appendChild(tempContainer);
+    const imgData = canvas.toDataURL('image/png');
+    const imgWidth = 190; // A4 width in mm minus margins
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-    try {
-      // Capturar o elemento como imagem com configuracoes otimizadas
-      const canvas = await html2canvas(sanitizedElement, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        ignoreElements: (element) => {
-          // Ignora scripts e estilos
-          return element.tagName === 'SCRIPT' || element.tagName === 'STYLE';
-        },
-      });
+    // Criar PDF
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4',
+    });
 
-      const imgData = canvas.toDataURL('image/png');
-      const imgWidth = 210; // A4 width in mm
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    let yPosition = 10;
 
-      // Criar PDF
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4',
-      });
+    // Adicionar titulo
+    pdf.setFontSize(18);
+    pdf.text(mapData.title, 10, yPosition);
+    yPosition += 10;
 
-      let yPosition = 10;
+    // Adicionar data
+    pdf.setFontSize(10);
+    pdf.setTextColor(100);
+    const formattedDate = new Date(mapData.createdAt).toLocaleDateString('pt-BR', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+    pdf.text(`Data: ${formattedDate}`, 10, yPosition);
+    yPosition += 8;
 
-      // Adicionar titulo
-      pdf.setFontSize(18);
-      pdf.text(mapData.title, 10, yPosition);
+    // Adicionar descrição
+    if (mapData.description) {
+      pdf.setFontSize(10);
+      pdf.setTextColor(0);
+      const descriptionLines = pdf.splitTextToSize(mapData.description, 190);
+      pdf.text(descriptionLines, 10, yPosition);
+      yPosition += descriptionLines.length * 5 + 5;
+    }
+
+    // Adicionar imagem do mapa
+    const maxImgHeight = 270 - yPosition;
+    let finalImgHeight = imgHeight;
+
+    if (finalImgHeight > maxImgHeight) {
+      finalImgHeight = maxImgHeight;
+    }
+
+    const finalImgWidth = (finalImgHeight * imgWidth) / imgHeight;
+    const xPosition = (210 - finalImgWidth) / 2;
+
+    pdf.addImage(imgData, 'PNG', xPosition, yPosition, finalImgWidth, finalImgHeight);
+    yPosition += finalImgHeight + 10;
+
+    // Adicionar nova página para legenda se necessário
+    if (mapData.risks.length > 0) {
+      pdf.addPage();
+      yPosition = 10;
+
+      // Titulo da legenda
+      pdf.setFontSize(14);
+      pdf.text('Legenda de Riscos', 10, yPosition);
       yPosition += 10;
 
-      // Adicionar data
+      // Adicionar cada risco na legenda
       pdf.setFontSize(10);
-      pdf.setTextColor(100);
-      const formattedDate = new Date(mapData.createdAt).toLocaleDateString('pt-BR', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      });
-      pdf.text(`Data: ${formattedDate}`, 10, yPosition);
-      yPosition += 8;
+      mapData.risks.forEach((risk) => {
+        // Desenhar círculo de cor
+        const circleRadius = 3;
+        const rgbColor = hexToRgb(risk.color);
+        pdf.setFillColor(rgbColor.r, rgbColor.g, rgbColor.b);
+        pdf.circle(15, yPosition + 1, circleRadius, 'F');
 
-      // Adicionar descricao
-      if (mapData.description) {
-        pdf.setFontSize(10);
+        // Adicionar informações do risco
         pdf.setTextColor(0);
-        const descriptionLines = pdf.splitTextToSize(mapData.description, 190);
-        pdf.text(descriptionLines, 10, yPosition);
-        yPosition += descriptionLines.length * 5 + 5;
-      }
+        pdf.text(`${risk.label}`, 22, yPosition);
+        yPosition += 5;
 
-      // Adicionar imagem do mapa
-      const maxImgHeight = 270 - yPosition;
-      let finalImgHeight = imgHeight;
+        pdf.setFontSize(9);
+        pdf.setTextColor(100);
+        pdf.text(`Tipo: ${risk.type} | Gravidade: ${risk.severity}`, 22, yPosition);
+        yPosition += 4;
 
-      if (finalImgHeight > maxImgHeight) {
-        finalImgHeight = maxImgHeight;
-      }
+        if (risk.description) {
+          const descLines = pdf.splitTextToSize(risk.description, 170);
+          pdf.text(descLines, 22, yPosition);
+          yPosition += descLines.length * 3 + 2;
+        }
 
-      const finalImgWidth = (finalImgHeight * imgWidth) / imgHeight;
-      const xPosition = (210 - finalImgWidth) / 2;
-
-      pdf.addImage(imgData, 'PNG', xPosition, yPosition, finalImgWidth, finalImgHeight);
-      yPosition += finalImgHeight + 10;
-
-      // Adicionar nova pagina para legenda se necessario
-      if (mapData.risks.length > 0) {
-        pdf.addPage();
-        yPosition = 10;
-
-        // Titulo da legenda
-        pdf.setFontSize(14);
-        pdf.text('Legenda de Riscos', 10, yPosition);
-        yPosition += 10;
-
-        // Adicionar cada risco na legenda
+        yPosition += 2;
         pdf.setFontSize(10);
-        mapData.risks.forEach((risk) => {
-          // Desenhar circulo de cor
-          const circleRadius = 3;
-          const rgbColor = hexToRgb(risk.color);
-          pdf.setFillColor(rgbColor.r, rgbColor.g, rgbColor.b);
-          pdf.circle(15, yPosition + 1, circleRadius, 'F');
 
-          // Adicionar informacoes do risco
-          pdf.setTextColor(0);
-          pdf.text(`${risk.label}`, 22, yPosition);
-          yPosition += 5;
-
-          pdf.setFontSize(9);
-          pdf.setTextColor(100);
-          pdf.text(`Tipo: ${risk.type} | Gravidade: ${risk.severity}`, 22, yPosition);
-          yPosition += 4;
-
-          if (risk.description) {
-            const descLines = pdf.splitTextToSize(risk.description, 170);
-            pdf.text(descLines, 22, yPosition);
-            yPosition += descLines.length * 3 + 2;
-          }
-
-          yPosition += 2;
-          pdf.setFontSize(10);
-
-          // Verificar se precisa de nova pagina
-          if (yPosition > 270) {
-            pdf.addPage();
-            yPosition = 10;
-          }
-        });
-      }
-
-      // Salvar PDF
-      pdf.save(filename);
-    } finally {
-      // Remover container temporario
-      document.body.removeChild(tempContainer);
+        // Verificar se precisa de nova página
+        if (yPosition > 270) {
+          pdf.addPage();
+          yPosition = 10;
+        }
+      });
     }
+
+    // Salvar PDF
+    pdf.save(filename);
   } catch (error) {
     console.error('Erro ao exportar PDF:', error);
     // Fallback: tenta criar PDF apenas com texto
@@ -245,6 +163,100 @@ export async function exportMapToPDF(
       throw error;
     }
   }
+}
+
+/**
+ * Captura o elemento do mapa como canvas usando drawImage
+ */
+async function captureMapAsCanvas(element: HTMLElement): Promise<HTMLCanvasElement> {
+  return new Promise((resolve, reject) => {
+    // Usar requestAnimationFrame para garantir que o elemento está renderizado
+    requestAnimationFrame(async () => {
+      try {
+        // Criar canvas com as dimensões do elemento
+        const canvas = document.createElement('canvas');
+        const rect = element.getBoundingClientRect();
+        
+        canvas.width = rect.width * window.devicePixelRatio;
+        canvas.height = rect.height * window.devicePixelRatio;
+        
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          throw new Error('Não foi possível obter contexto 2D do canvas');
+        }
+        
+        // Escalar para device pixel ratio
+        ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        
+        // Preencher com branco
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, rect.width, rect.height);
+        
+        // Usar foreignObject para renderizar HTML no canvas
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('width', String(rect.width));
+        svg.setAttribute('height', String(rect.height));
+        svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+        
+        const foreignObject = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
+        foreignObject.setAttribute('width', String(rect.width));
+        foreignObject.setAttribute('height', String(rect.height));
+        foreignObject.setAttribute('x', '0');
+        foreignObject.setAttribute('y', '0');
+        
+        // Clonar elemento e remover estilos OKLCH
+        const clone = element.cloneNode(true) as HTMLElement;
+        removeOklchStyles(clone);
+        
+        foreignObject.appendChild(clone);
+        svg.appendChild(foreignObject);
+        
+        const svgString = new XMLSerializer().serializeToString(svg);
+        const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+        const svgUrl = URL.createObjectURL(svgBlob);
+        
+        const img = new Image();
+        img.onload = () => {
+          ctx.drawImage(img, 0, 0);
+          URL.revokeObjectURL(svgUrl);
+          resolve(canvas);
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(svgUrl);
+          reject(new Error('Erro ao carregar imagem SVG'));
+        };
+        img.src = svgUrl;
+      } catch (error) {
+        reject(error);
+      }
+    });
+  });
+}
+
+/**
+ * Remove estilos OKLCH de um elemento recursivamente
+ */
+function removeOklchStyles(element: Element): void {
+  // Remove atributo style se contiver oklch
+  const style = element.getAttribute('style');
+  if (style && style.includes('oklch')) {
+    const newStyle = style.replace(/[^;]*oklch[^;]*;?/gi, '');
+    if (newStyle.trim()) {
+      element.setAttribute('style', newStyle);
+    } else {
+      element.removeAttribute('style');
+    }
+  }
+  
+  // Remove classes
+  try {
+    (element as HTMLElement).className = '';
+  } catch (e) {
+    // Ignora erro para SVG
+  }
+  
+  // Processa filhos
+  Array.from(element.children).forEach(removeOklchStyles);
 }
 
 /**
