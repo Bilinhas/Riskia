@@ -105,7 +105,6 @@ export async function exportMapToPDF(
         console.log('Imagem adicionada com sucesso');
       } catch (imgError) {
         console.error('Erro ao adicionar imagem ao PDF:', imgError);
-        // Continuar sem imagem
       }
     } else {
       console.warn('Nenhuma imagem disponível para adicionar ao PDF');
@@ -178,24 +177,21 @@ async function captureMapAsImage(
     console.log('Importando html2canvas...');
     const { default: html2canvas } = await import('html2canvas');
 
-    // Clonar elemento e remover classes Tailwind
-    const clonedElement = element.cloneNode(true) as HTMLElement;
-    removeAllClasses(clonedElement);
-    
-    // Remover atributos style que possam conter OKLCH
-    removeOklchStyles(clonedElement);
+    console.log('Elemento a capturar:', element);
+    console.log('Dimensões do elemento:', element.scrollWidth, 'x', element.scrollHeight);
 
-    console.log('Elemento a capturar:', clonedElement);
-    console.log('Dimensões do elemento:', clonedElement.scrollWidth, 'x', clonedElement.scrollHeight);
-
-    const canvas = await html2canvas(clonedElement, {
+    // Renderizar diretamente o elemento sem clonar
+    // Isso evita problemas com iframe e elementos não encontrados
+    const canvas = await html2canvas(element, {
       backgroundColor: '#ffffff',
       scale: 2,
       useCORS: false,
       allowTaint: true,
-      logging: true,
-      windowHeight: clonedElement.scrollHeight,
-      windowWidth: clonedElement.scrollWidth,
+      logging: false,
+      windowHeight: element.scrollHeight,
+      windowWidth: element.scrollWidth,
+      // Não usar iframe para evitar problemas
+      foreignObjectRendering: false,
     });
 
     console.log('Canvas criado:', canvas.width, 'x', canvas.height);
@@ -212,38 +208,6 @@ async function captureMapAsImage(
     console.error('Erro ao capturar mapa como imagem:', error);
     return null;
   }
-}
-
-/**
- * Remove todas as classes de um elemento e seus filhos
- */
-function removeAllClasses(element: HTMLElement): void {
-  element.removeAttribute('class');
-  element.removeAttribute('style');
-  
-  const children = element.querySelectorAll('*');
-  children.forEach((child) => {
-    (child as HTMLElement).removeAttribute('class');
-    (child as HTMLElement).removeAttribute('style');
-  });
-}
-
-/**
- * Remove estilos OKLCH de um elemento e seus filhos
- */
-function removeOklchStyles(element: HTMLElement): void {
-  const removeOklchFromElement = (el: HTMLElement) => {
-    const style = el.getAttribute('style');
-    if (style && style.includes('oklch')) {
-      el.removeAttribute('style');
-    }
-  };
-
-  removeOklchFromElement(element);
-  const children = element.querySelectorAll('*');
-  children.forEach((child) => {
-    removeOklchFromElement(child as HTMLElement);
-  });
 }
 
 /**
