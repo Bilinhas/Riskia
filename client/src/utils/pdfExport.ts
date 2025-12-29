@@ -21,6 +21,13 @@ interface MapData {
 
 /**
  * Exporta o mapa de riscos como PDF
+ * 
+ * Solução para erro OKLCH:
+ * 1. Clona o elemento
+ * 2. Remove todas as classes Tailwind (que contêm cores OKLCH)
+ * 3. Adiciona estilos inline básicos (sem OKLCH)
+ * 4. Captura com html2canvas
+ * 5. Gera PDF com jsPDF
  */
 export async function exportMapToPDF(
   mapContainerId: string,
@@ -46,7 +53,7 @@ export async function exportMapToPDF(
         console.warn('Captura de mapa retornou null');
       }
     } catch (captureError) {
-      console.error('Erro ao capturar mapa:', captureError);
+      console.error('Erro ao capturar mapa como imagem:', captureError);
     }
 
     // Criar PDF com jsPDF
@@ -168,11 +175,42 @@ export async function exportMapToPDF(
 }
 
 /**
+ * Remove classes Tailwind de um elemento e seus filhos
+ * Isso evita erros com cores OKLCH que html2canvas não suporta
+ */
+function removeAllTailwindClasses(element: HTMLElement): void {
+  // Remover todas as classes do elemento
+  element.className = '';
+
+  // Remover atributos style que contenham OKLCH
+  if (element.style.cssText) {
+    let styleText = element.style.cssText;
+    // Remover propriedades que contenham oklch
+    styleText = styleText.replace(/[^;]*oklch[^;]*;?/gi, '');
+    element.style.cssText = styleText;
+  }
+
+  // Processar recursivamente todos os filhos
+  Array.from(element.children).forEach((child) => {
+    removeAllTailwindClasses(child as HTMLElement);
+  });
+}
+
+/**
  * Captura o mapa como imagem PNG
+ * 
+ * Estratégia:
+ * 1. Clona o elemento para não modificar o DOM original
+ * 2. Remove todas as classes Tailwind (que contêm OKLCH)
+ * 3. Adiciona estilos inline básicos
+ * 4. Captura com html2canvas
+ * 5. Remove o clone
  */
 async function captureMapAsImage(
   element: HTMLElement
 ): Promise<{ data: string; width: number; height: number } | null> {
+  let clonedElement: HTMLElement | null = null;
+
   try {
     console.log('Importando html2canvas...');
     const { default: html2canvas } = await import('html2canvas');
@@ -180,17 +218,37 @@ async function captureMapAsImage(
     console.log('Elemento a capturar:', element);
     console.log('Dimensões do elemento:', element.scrollWidth, 'x', element.scrollHeight);
 
-    // Renderizar diretamente o elemento sem clonar
-    // Isso evita problemas com iframe e elementos não encontrados
-    const canvas = await html2canvas(element, {
+    // Clonar o elemento para não modificar o original
+    clonedElement = element.cloneNode(true) as HTMLElement;
+
+    // Remover todas as classes Tailwind
+    console.log('Removendo classes Tailwind...');
+    removeAllTailwindClasses(clonedElement);
+
+    // Adicionar estilos inline básicos para garantir visibilidade
+    clonedElement.style.backgroundColor = '#ffffff';
+    clonedElement.style.color = '#000000';
+    clonedElement.style.fontFamily = 'Arial, sans-serif';
+
+    // Adicionar o clone temporariamente ao DOM (necessário para html2canvas)
+    const tempContainer = document.createElement('div');
+    tempContainer.style.position = 'fixed';
+    tempContainer.style.left = '-9999px';
+    tempContainer.style.top = '-9999px';
+    tempContainer.appendChild(clonedElement);
+    document.body.appendChild(tempContainer);
+
+    console.log('Capturando elemento clonado com html2canvas...');
+
+    // Renderizar o elemento clonado
+    const canvas = await html2canvas(clonedElement, {
       backgroundColor: '#ffffff',
       scale: 2,
       useCORS: false,
       allowTaint: true,
       logging: false,
-      windowHeight: element.scrollHeight,
-      windowWidth: element.scrollWidth,
-      // Não usar iframe para evitar problemas
+      windowHeight: clonedElement.scrollHeight,
+      windowWidth: clonedElement.scrollWidth,
       foreignObjectRendering: false,
     });
 
@@ -207,6 +265,11 @@ async function captureMapAsImage(
   } catch (error) {
     console.error('Erro ao capturar mapa como imagem:', error);
     return null;
+  } finally {
+    // Limpar o clone do DOM
+    if (clonedElement && clonedElement.parentElement) {
+      clonedElement.parentElement.remove();
+    }
   }
 }
 
