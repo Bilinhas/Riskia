@@ -1,7 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
-import { Menu, LogOut, FileText } from "lucide-react";
+import { Menu, LogOut } from "lucide-react";
 import { useState } from "react";
 
 export default function Header() {
@@ -21,11 +21,9 @@ export default function Header() {
           onClick={() => setLocation("/editor")}
           className="flex items-center gap-2 hover:opacity-80 transition-opacity"
         >
-          <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center">
-            <FileText className="w-5 h-5 text-accent-foreground" />
-          </div>
+          <img src="/riskia-logo.png" alt="Riskia" className="w-8 h-8" />
           <span className="font-semibold text-foreground hidden sm:inline">
-            Mapa de Risco IA
+            Riskia
           </span>
         </button>
 
