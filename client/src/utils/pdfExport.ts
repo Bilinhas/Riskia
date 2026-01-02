@@ -178,22 +178,41 @@ export async function exportMapToPDF(
  * Remove classes Tailwind de um elemento e seus filhos
  * Isso evita erros com cores OKLCH que html2canvas não suporta
  */
-function removeAllTailwindClasses(element: HTMLElement): void {
-  // Remover todas as classes do elemento
-  element.className = '';
+function removeAllTailwindClasses(element: HTMLElement | SVGElement): void {
+  try {
+    // Verificar se é um elemento SVG
+    const isSVG = element instanceof SVGElement;
 
-  // Remover atributos style que contenham OKLCH
-  if (element.style.cssText) {
-    let styleText = element.style.cssText;
-    // Remover propriedades que contenham oklch
-    styleText = styleText.replace(/[^;]*oklch[^;]*;?/gi, '');
-    element.style.cssText = styleText;
+    if (isSVG) {
+      // Para SVG, usar removeAttribute em vez de className
+      if (element.hasAttribute('class')) {
+        element.removeAttribute('class');
+      }
+    } else {
+      // Para HTML, remover classes normalmente
+      (element as HTMLElement).className = '';
+    }
+
+    // Remover atributos style que contenham OKLCH
+    if (element.style && element.style.cssText) {
+      let styleText = element.style.cssText;
+      // Remover propriedades que contenham oklch
+      styleText = styleText.replace(/[^;]*oklch[^;]*;?/gi, '');
+      element.style.cssText = styleText;
+    }
+  } catch (error) {
+    // Silenciosamente ignorar erros de modificação de atributos
+    console.debug('Erro ao remover classes:', error);
   }
 
   // Processar recursivamente todos os filhos
-  Array.from(element.children).forEach((child) => {
-    removeAllTailwindClasses(child as HTMLElement);
-  });
+  try {
+    Array.from(element.children).forEach((child) => {
+      removeAllTailwindClasses(child as HTMLElement | SVGElement);
+    });
+  } catch (error) {
+    console.debug('Erro ao processar filhos:', error);
+  }
 }
 
 /**
