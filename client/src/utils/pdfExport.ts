@@ -22,12 +22,14 @@ interface MapData {
 /**
  * Exporta o mapa de riscos como PDF
  * 
- * Solução para erro OKLCH:
- * 1. Clona o elemento
- * 2. Remove todas as classes Tailwind (que contêm cores OKLCH)
- * 3. Adiciona estilos inline básicos (sem OKLCH)
- * 4. Captura com html2canvas
- * 5. Gera PDF com jsPDF
+ * SOLUÇÃO DEFINITIVA PARA OKLCH:
+ * 1. Desabilita TODOS os stylesheets
+ * 2. Clona o elemento
+ * 3. Remove todas as classes e atributos style
+ * 4. Reaplica apenas estilos RGB inline
+ * 5. Captura com html2canvas
+ * 6. Reabilita stylesheets
+ * 7. Gera PDF
  */
 export async function exportMapToPDF(
   mapContainerId: string,
@@ -175,60 +177,24 @@ export async function exportMapToPDF(
 }
 
 /**
- * Remove classes Tailwind de um elemento e seus filhos
- * Isso evita erros com cores OKLCH que html2canvas não suporta
- */
-function removeAllTailwindClasses(element: HTMLElement | SVGElement): void {
-  try {
-    // Verificar se é um elemento SVG
-    const isSVG = element instanceof SVGElement;
-
-    if (isSVG) {
-      // Para SVG, usar removeAttribute em vez de className
-      if (element.hasAttribute('class')) {
-        element.removeAttribute('class');
-      }
-    } else {
-      // Para HTML, remover classes normalmente
-      (element as HTMLElement).className = '';
-    }
-
-    // Remover atributos style que contenham OKLCH
-    if (element.style && element.style.cssText) {
-      let styleText = element.style.cssText;
-      // Remover propriedades que contenham oklch
-      styleText = styleText.replace(/[^;]*oklch[^;]*;?/gi, '');
-      element.style.cssText = styleText;
-    }
-  } catch (error) {
-    // Silenciosamente ignorar erros de modificação de atributos
-    console.debug('Erro ao remover classes:', error);
-  }
-
-  // Processar recursivamente todos os filhos
-  try {
-    Array.from(element.children).forEach((child) => {
-      removeAllTailwindClasses(child as HTMLElement | SVGElement);
-    });
-  } catch (error) {
-    console.debug('Erro ao processar filhos:', error);
-  }
-}
-
-/**
  * Captura o mapa como imagem PNG
  * 
- * Estratégia:
- * 1. Clona o elemento para não modificar o DOM original
- * 2. Remove todas as classes Tailwind (que contêm OKLCH)
- * 3. Adiciona estilos inline básicos
- * 4. Captura com html2canvas
- * 5. Remove o clone
+ * ESTRATÉGIA DEFINITIVA:
+ * 1. Desabilita TODOS os stylesheets (CSS)
+ * 2. Clona o elemento
+ * 3. Remove TODAS as classes e atributos style
+ * 4. Reaplica apenas estilos RGB inline necessários
+ * 5. Captura com html2canvas
+ * 6. Reabilita stylesheets
+ * 7. Remove o clone
  */
 async function captureMapAsImage(
   element: HTMLElement
 ): Promise<{ data: string; width: number; height: number } | null> {
   let clonedElement: HTMLElement | null = null;
+  let tempContainer: HTMLElement | null = null;
+  const disabledStylesheets: HTMLStyleElement[] = [];
+  const disabledLinks: HTMLLinkElement[] = [];
 
   try {
     console.log('Importando html2canvas...');
@@ -237,29 +203,46 @@ async function captureMapAsImage(
     console.log('Elemento a capturar:', element);
     console.log('Dimensões do elemento:', element.scrollWidth, 'x', element.scrollHeight);
 
-    // Clonar o elemento para não modificar o original
+    // PASSO 1: Desabilitar TODOS os stylesheets
+    console.log('Desabilitando stylesheets...');
+    
+    // Desabilitar todas as tags <style>
+    const allStyles = Array.from(document.querySelectorAll('style'));
+    allStyles.forEach((style) => {
+      style.disabled = true;
+      disabledStylesheets.push(style);
+    });
+
+    // Desabilitar todos os <link rel="stylesheet">
+    const allLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
+    allLinks.forEach((link) => {
+      (link as HTMLLinkElement).disabled = true;
+      disabledLinks.push(link as HTMLLinkElement);
+    });
+
+    // PASSO 2: Clonar o elemento
     clonedElement = element.cloneNode(true) as HTMLElement;
 
-    // Remover todas as classes Tailwind
-    console.log('Removendo classes Tailwind...');
-    removeAllTailwindClasses(clonedElement);
+    // PASSO 3: Remover TODAS as classes e estilos
+    console.log('Removendo classes e estilos...');
+    stripAllStyles(clonedElement);
 
-    // Adicionar estilos inline básicos para garantir visibilidade
-    clonedElement.style.backgroundColor = '#ffffff';
-    clonedElement.style.color = '#000000';
-    clonedElement.style.fontFamily = 'Arial, sans-serif';
-
-    // Adicionar o clone temporariamente ao DOM (necessário para html2canvas)
-    const tempContainer = document.createElement('div');
+    // PASSO 4: Criar container temporário
+    tempContainer = document.createElement('div');
     tempContainer.style.position = 'fixed';
     tempContainer.style.left = '-9999px';
     tempContainer.style.top = '-9999px';
+    tempContainer.style.backgroundColor = '#ffffff';
+    tempContainer.style.zIndex = '-9999';
     tempContainer.appendChild(clonedElement);
     document.body.appendChild(tempContainer);
 
-    console.log('Capturando elemento clonado com html2canvas...');
+    // Aguardar um pouco para o DOM renderizar
+    await new Promise(resolve => setTimeout(resolve, 100));
 
-    // Renderizar o elemento clonado
+    console.log('Capturando elemento com html2canvas...');
+
+    // PASSO 5: Capturar com html2canvas
     const canvas = await html2canvas(clonedElement, {
       backgroundColor: '#ffffff',
       scale: 2,
@@ -269,6 +252,9 @@ async function captureMapAsImage(
       windowHeight: clonedElement.scrollHeight,
       windowWidth: clonedElement.scrollWidth,
       foreignObjectRendering: false,
+      ignoreElements: (element) => {
+        return element.tagName === 'SCRIPT' || element.tagName === 'STYLE';
+      },
     });
 
     console.log('Canvas criado:', canvas.width, 'x', canvas.height);
@@ -285,10 +271,63 @@ async function captureMapAsImage(
     console.error('Erro ao capturar mapa como imagem:', error);
     return null;
   } finally {
-    // Limpar o clone do DOM
-    if (clonedElement && clonedElement.parentElement) {
-      clonedElement.parentElement.remove();
+    // PASSO 6: Reabilitar stylesheets
+    console.log('Reabilitando stylesheets...');
+    disabledStylesheets.forEach((style) => {
+      style.disabled = false;
+    });
+    disabledLinks.forEach((link) => {
+      link.disabled = false;
+    });
+
+    // PASSO 7: Limpar o clone do DOM
+    if (tempContainer && tempContainer.parentElement) {
+      tempContainer.parentElement.removeChild(tempContainer);
     }
+  }
+}
+
+/**
+ * Remove TODOS os estilos de um elemento recursivamente
+ */
+function stripAllStyles(element: HTMLElement | SVGElement): void {
+  try {
+    // Remover todas as classes
+    if (element.hasAttribute('class')) {
+      element.removeAttribute('class');
+    }
+
+    // Remover todos os atributos style
+    if (element.hasAttribute('style')) {
+      element.removeAttribute('style');
+    }
+
+    // Reaplica apenas estilos básicos para layout
+    const tagName = element.tagName?.toLowerCase();
+    
+    if (tagName === 'circle' || tagName === 'rect' || tagName === 'path' || tagName === 'polygon') {
+      // Para SVG, manter fill/stroke originais
+      const fill = element.getAttribute('fill');
+      const stroke = element.getAttribute('stroke');
+      
+      if (!fill && !stroke) {
+        element.setAttribute('fill', '#000000');
+      }
+    } else if (tagName === 'text' || tagName === 'tspan') {
+      // Para texto, manter legível
+      element.setAttribute('fill', '#000000');
+    }
+  } catch (error) {
+    console.debug('Erro ao remover estilos:', error);
+  }
+
+  // Processar filhos recursivamente
+  try {
+    Array.from(element.children).forEach((child) => {
+      stripAllStyles(child as HTMLElement | SVGElement);
+    });
+  } catch (error) {
+    console.debug('Erro ao processar filhos:', error);
   }
 }
 
