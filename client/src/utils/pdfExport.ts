@@ -22,14 +22,11 @@ interface MapData {
 /**
  * Exporta o mapa de riscos como PDF
  * 
- * SOLUÇÃO DEFINITIVA PARA OKLCH:
- * 1. Desabilita TODOS os stylesheets
- * 2. Clona o elemento
- * 3. Remove todas as classes e atributos style
- * 4. Reaplica apenas estilos RGB inline
- * 5. Captura com html2canvas
- * 6. Reabilita stylesheets
- * 7. Gera PDF
+ * SOLUÇÃO OTIMIZADA:
+ * 1. Preserva estilos visuais originais (cores, layouts)
+ * 2. Remove apenas propriedades CSS que contenham OKLCH
+ * 3. Captura com html2canvas em alta qualidade
+ * 4. Gera PDF com jsPDF
  */
 export async function exportMapToPDF(
   mapContainerId: string,
@@ -179,22 +176,19 @@ export async function exportMapToPDF(
 /**
  * Captura o mapa como imagem PNG
  * 
- * ESTRATÉGIA DEFINITIVA:
- * 1. Desabilita TODOS os stylesheets (CSS)
- * 2. Clona o elemento
- * 3. Remove TODAS as classes e atributos style
- * 4. Reaplica apenas estilos RGB inline necessários
- * 5. Captura com html2canvas
- * 6. Reabilita stylesheets
- * 7. Remove o clone
+ * ESTRATÉGIA OTIMIZADA:
+ * 1. Clona o elemento
+ * 2. Remove APENAS propriedades CSS que contenham "oklch"
+ * 3. Mantém todos os outros estilos (cores RGB, layouts, etc)
+ * 4. Captura com html2canvas em alta qualidade
+ * 5. Remove o clone
  */
 async function captureMapAsImage(
   element: HTMLElement
 ): Promise<{ data: string; width: number; height: number } | null> {
   let clonedElement: HTMLElement | null = null;
   let tempContainer: HTMLElement | null = null;
-  const disabledStylesheets: HTMLStyleElement[] = [];
-  const disabledLinks: HTMLLinkElement[] = [];
+  const originalStylesheets: { element: HTMLStyleElement; content: string }[] = [];
 
   try {
     console.log('Importando html2canvas...');
@@ -203,36 +197,37 @@ async function captureMapAsImage(
     console.log('Elemento a capturar:', element);
     console.log('Dimensões do elemento:', element.scrollWidth, 'x', element.scrollHeight);
 
-    // PASSO 1: Desabilitar TODOS os stylesheets
-    console.log('Desabilitando stylesheets...');
+    // PASSO 1: Remover apenas OKLCH dos stylesheets
+    console.log('Removendo propriedades OKLCH dos stylesheets...');
     
-    // Desabilitar todas as tags <style>
     const allStyles = Array.from(document.querySelectorAll('style'));
     allStyles.forEach((style) => {
-      style.disabled = true;
-      disabledStylesheets.push(style);
-    });
+      if (style.textContent) {
+        // Guardar conteúdo original
+        originalStylesheets.push({
+          element: style,
+          content: style.textContent,
+        });
 
-    // Desabilitar todos os <link rel="stylesheet">
-    const allLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
-    allLinks.forEach((link) => {
-      (link as HTMLLinkElement).disabled = true;
-      disabledLinks.push(link as HTMLLinkElement);
+        // Remover apenas linhas que contenham "oklch"
+        const lines = style.textContent.split('\n');
+        const filteredLines = lines.filter(line => !line.includes('oklch'));
+        style.textContent = filteredLines.join('\n');
+      }
     });
 
     // PASSO 2: Clonar o elemento
     clonedElement = element.cloneNode(true) as HTMLElement;
 
-    // PASSO 3: Remover TODAS as classes e estilos
-    console.log('Removendo classes e estilos...');
-    stripAllStyles(clonedElement);
+    // PASSO 3: Remover OKLCH de estilos inline também
+    console.log('Removendo OKLCH de estilos inline...');
+    removeOklchFromInlineStyles(clonedElement);
 
     // PASSO 4: Criar container temporário
     tempContainer = document.createElement('div');
     tempContainer.style.position = 'fixed';
     tempContainer.style.left = '-9999px';
     tempContainer.style.top = '-9999px';
-    tempContainer.style.backgroundColor = '#ffffff';
     tempContainer.style.zIndex = '-9999';
     tempContainer.appendChild(clonedElement);
     document.body.appendChild(tempContainer);
@@ -246,14 +241,14 @@ async function captureMapAsImage(
     const canvas = await html2canvas(clonedElement, {
       backgroundColor: '#ffffff',
       scale: 2,
-      useCORS: false,
+      useCORS: true,
       allowTaint: true,
       logging: false,
       windowHeight: clonedElement.scrollHeight,
       windowWidth: clonedElement.scrollWidth,
       foreignObjectRendering: false,
       ignoreElements: (element) => {
-        return element.tagName === 'SCRIPT' || element.tagName === 'STYLE';
+        return element.tagName === 'SCRIPT';
       },
     });
 
@@ -271,13 +266,10 @@ async function captureMapAsImage(
     console.error('Erro ao capturar mapa como imagem:', error);
     return null;
   } finally {
-    // PASSO 6: Reabilitar stylesheets
-    console.log('Reabilitando stylesheets...');
-    disabledStylesheets.forEach((style) => {
-      style.disabled = false;
-    });
-    disabledLinks.forEach((link) => {
-      link.disabled = false;
+    // PASSO 6: Restaurar stylesheets originais
+    console.log('Restaurando stylesheets originais...');
+    originalStylesheets.forEach(({ element, content }) => {
+      element.textContent = content;
     });
 
     // PASSO 7: Limpar o clone do DOM
@@ -288,43 +280,25 @@ async function captureMapAsImage(
 }
 
 /**
- * Remove TODOS os estilos de um elemento recursivamente
+ * Remove propriedades OKLCH de estilos inline
  */
-function stripAllStyles(element: HTMLElement | SVGElement): void {
+function removeOklchFromInlineStyles(element: HTMLElement | SVGElement): void {
   try {
-    // Remover todas as classes
-    if (element.hasAttribute('class')) {
-      element.removeAttribute('class');
-    }
-
-    // Remover todos os atributos style
-    if (element.hasAttribute('style')) {
-      element.removeAttribute('style');
-    }
-
-    // Reaplica apenas estilos básicos para layout
-    const tagName = element.tagName?.toLowerCase();
-    
-    if (tagName === 'circle' || tagName === 'rect' || tagName === 'path' || tagName === 'polygon') {
-      // Para SVG, manter fill/stroke originais
-      const fill = element.getAttribute('fill');
-      const stroke = element.getAttribute('stroke');
-      
-      if (!fill && !stroke) {
-        element.setAttribute('fill', '#000000');
-      }
-    } else if (tagName === 'text' || tagName === 'tspan') {
-      // Para texto, manter legível
-      element.setAttribute('fill', '#000000');
+    if (element.style && element.style.cssText) {
+      let styleText = element.style.cssText;
+      // Remover apenas propriedades que contenham oklch
+      const properties = styleText.split(';');
+      const filteredProperties = properties.filter(prop => !prop.toLowerCase().includes('oklch'));
+      element.style.cssText = filteredProperties.join(';');
     }
   } catch (error) {
-    console.debug('Erro ao remover estilos:', error);
+    console.debug('Erro ao remover OKLCH de estilos inline:', error);
   }
 
   // Processar filhos recursivamente
   try {
     Array.from(element.children).forEach((child) => {
-      stripAllStyles(child as HTMLElement | SVGElement);
+      removeOklchFromInlineStyles(child as HTMLElement | SVGElement);
     });
   } catch (error) {
     console.debug('Erro ao processar filhos:', error);
