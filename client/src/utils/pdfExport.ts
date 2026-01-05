@@ -22,11 +22,12 @@ interface MapData {
 /**
  * Exporta o mapa de riscos como PDF
  * 
- * SOLUÇÃO OTIMIZADA:
- * 1. Preserva estilos visuais originais (cores, layouts)
- * 2. Remove apenas propriedades CSS que contenham OKLCH
- * 3. Captura com html2canvas em alta qualidade
- * 4. Gera PDF com jsPDF
+ * SOLUÇÃO OTIMIZADA v2:
+ * 1. Captura apenas o canvas do mapa (sem legenda)
+ * 2. Preserva proporções corretas do mapa
+ * 3. Remove apenas propriedades CSS que contenham OKLCH
+ * 4. Adiciona legenda separadamente no PDF
+ * 5. Renderização em alta qualidade
  */
 export async function exportMapToPDF(
   mapContainerId: string,
@@ -34,18 +35,26 @@ export async function exportMapToPDF(
   filename: string = 'mapa-risco.pdf'
 ): Promise<void> {
   try {
-    const element = document.getElementById(mapContainerId);
-    if (!element) {
+    const container = document.getElementById(mapContainerId);
+    if (!container) {
       throw new Error('Elemento do mapa não encontrado');
     }
 
     console.log('Iniciando exportação de PDF...');
 
+    // Encontrar o elemento do canvas (apenas o mapa, sem legenda)
+    const canvasElement = container.querySelector('.bg-white.rounded-lg.border.border-border.overflow-auto');
+    if (!canvasElement) {
+      throw new Error('Elemento do canvas não encontrado');
+    }
+
+    console.log('Canvas encontrado:', canvasElement);
+
     // Capturar o mapa como imagem
     let mapImage: { data: string; width: number; height: number } | null = null;
     try {
       console.log('Tentando capturar mapa como imagem...');
-      mapImage = await captureMapAsImage(element);
+      mapImage = await captureMapAsImage(canvasElement as HTMLElement);
       if (mapImage) {
         console.log('Mapa capturado com sucesso:', mapImage.width, 'x', mapImage.height);
       } else {
@@ -94,20 +103,31 @@ export async function exportMapToPDF(
     if (mapImage && mapImage.data) {
       try {
         console.log('Adicionando imagem ao PDF...');
-        const imgWidth = 190;
-        const imgHeight = (mapImage.height * imgWidth) / mapImage.width;
-        const maxImgHeight = 270 - yPosition;
+        
+        // Calcular dimensões mantendo proporção
+        const pageWidth = 210; // A4 width in mm
+        const pageHeight = 297; // A4 height in mm
+        const margin = 10;
+        const maxWidth = pageWidth - 2 * margin;
+        const maxHeight = pageHeight - yPosition - margin;
 
-        let finalImgHeight = imgHeight;
-        if (finalImgHeight > maxImgHeight) {
-          finalImgHeight = maxImgHeight;
+        // Calcular escala mantendo aspect ratio
+        const imgAspectRatio = mapImage.width / mapImage.height;
+        let imgWidth = maxWidth;
+        let imgHeight = imgWidth / imgAspectRatio;
+
+        // Se altura exceder, reduzir largura
+        if (imgHeight > maxHeight) {
+          imgHeight = maxHeight;
+          imgWidth = imgHeight * imgAspectRatio;
         }
 
-        const finalImgWidth = (finalImgHeight * mapImage.width) / mapImage.height;
-        const xPosition = (210 - finalImgWidth) / 2;
+        // Centralizar horizontalmente
+        const xPosition = (pageWidth - imgWidth) / 2;
 
-        pdf.addImage(mapImage.data, 'PNG', xPosition, yPosition, finalImgWidth, finalImgHeight);
-        yPosition += finalImgHeight + 10;
+        console.log(`Dimensões finais: ${imgWidth}mm x ${imgHeight}mm`);
+        pdf.addImage(mapImage.data, 'PNG', xPosition, yPosition, imgWidth, imgHeight);
+        yPosition += imgHeight + 10;
         console.log('Imagem adicionada com sucesso');
       } catch (imgError) {
         console.error('Erro ao adicionar imagem ao PDF:', imgError);
@@ -176,10 +196,10 @@ export async function exportMapToPDF(
 /**
  * Captura o mapa como imagem PNG
  * 
- * ESTRATÉGIA OTIMIZADA:
- * 1. Clona o elemento
- * 2. Remove APENAS propriedades CSS que contenham "oklch"
- * 3. Mantém todos os outros estilos (cores RGB, layouts, etc)
+ * ESTRATÉGIA OTIMIZADA v2:
+ * 1. Clona apenas o elemento do canvas (sem legenda)
+ * 2. Remove apenas propriedades CSS que contenham "oklch"
+ * 3. Mantém proporções corretas do SVG
  * 4. Captura com html2canvas em alta qualidade
  * 5. Remove o clone
  */
@@ -223,12 +243,18 @@ async function captureMapAsImage(
     console.log('Removendo OKLCH de estilos inline...');
     removeOklchFromInlineStyles(clonedElement);
 
-    // PASSO 4: Criar container temporário
+    // PASSO 4: Criar container temporário com dimensões corretas
     tempContainer = document.createElement('div');
     tempContainer.style.position = 'fixed';
     tempContainer.style.left = '-9999px';
     tempContainer.style.top = '-9999px';
     tempContainer.style.zIndex = '-9999';
+    tempContainer.style.backgroundColor = '#ffffff';
+    
+    // Preservar dimensões originais
+    tempContainer.style.width = element.scrollWidth + 'px';
+    tempContainer.style.height = element.scrollHeight + 'px';
+    
     tempContainer.appendChild(clonedElement);
     document.body.appendChild(tempContainer);
 
