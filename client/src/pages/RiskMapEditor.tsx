@@ -23,14 +23,14 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Loader2, Plus, Trash2, Share2, Download } from "lucide-react";
 import { toast } from "sonner";
 import RiskMapCanvas from "@/components/RiskMapCanvas";
 import RiskLegend from "@/components/RiskLegend";
 import Header from "@/components/Header";
 import { useLocation, useRoute } from "wouter";
 import { exportMapToPDF } from "@/utils/pdfExport";
-import { Download } from "lucide-react";
+
 
 // ============================================================================
 // TIPOS E INTERFACES
@@ -41,7 +41,7 @@ interface Risk {
   type: string;
   severity: string;
   label: string;
-  description: string;
+  description: string | null;
   xPosition: number;
   yPosition: number;
   radius: number;
@@ -507,15 +507,32 @@ export default function RiskMapEditor() {
               </p>
             </div>
             {floorPlanSvg && (
-              <Button
-                onClick={handleExportPDF}
-                disabled={isLoading}
-                className="gap-2"
-                variant="outline"
-              >
-                <Download className="w-4 h-4" />
-                Exportar PDF
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleExportPDF}
+                  disabled={isLoading}
+                  className="gap-2"
+                  variant="outline"
+                >
+                  <Download className="w-4 h-4" />
+                  Exportar PDF
+                </Button>
+                {mapId && (
+                  <Button
+                    onClick={() => {
+                      const shareLink = `${window.location.origin}/view/${mapId}`;
+                      navigator.clipboard.writeText(shareLink).then(() => {
+                        alert("Link de compartilhamento copiado!");
+                      });
+                    }}
+                    className="gap-2"
+                    variant="outline"
+                  >
+                    <Share2 className="w-4 h-4" />
+                    Compartilhar
+                  </Button>
+                )}
+              </div>
             )}
           </div>
 

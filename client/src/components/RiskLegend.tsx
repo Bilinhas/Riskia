@@ -5,7 +5,7 @@ interface Risk {
   type: string;
   severity: string;
   label: string;
-  description: string;
+  description: string | null;
   color: string;
   radius: number;
 }
@@ -13,6 +13,7 @@ interface Risk {
 interface RiskLegendProps {
   risks: Risk[];
   onDeleteRisk: (riskId: number) => void;
+  isReadOnly?: boolean;
 }
 
 const severityLabels: Record<string, string> = {
@@ -30,7 +31,7 @@ const typeLabels: Record<string, string> = {
   biological: "Biológico",
 };
 
-export default function RiskLegend({ risks, onDeleteRisk }: RiskLegendProps) {
+export default function RiskLegend({ risks, onDeleteRisk, isReadOnly = false }: RiskLegendProps) {
   return (
     <div className="space-y-3">
       {risks.map((risk, index) => (
@@ -74,13 +75,15 @@ export default function RiskLegend({ risks, onDeleteRisk }: RiskLegendProps) {
           </div>
 
           {/* Delete Button */}
-          <button
-            onClick={() => onDeleteRisk(risk.id)}
-            className="flex-shrink-0 p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
-            title="Remover risco"
-          >
-            <Trash2 size={18} />
-          </button>
+          {!isReadOnly && (
+            <button
+              onClick={() => onDeleteRisk(risk.id)}
+              className="flex-shrink-0 p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+              title="Remover risco"
+            >
+              <Trash2 size={18} />
+            </button>
+          )}
         </div>
       ))}
     </div>

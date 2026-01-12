@@ -5,7 +5,7 @@ interface Risk {
   type: string;
   severity: string;
   label: string;
-  description: string;
+  description: string | null;
   xPosition: number;
   yPosition: number;
   radius: number;

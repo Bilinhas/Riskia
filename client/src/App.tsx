@@ -4,6 +4,7 @@ import NotFound from "@/pages/NotFound";
 import Home from "@/pages/Home";
 import RiskMapEditor from "@/pages/RiskMapEditor";
 import SavedMaps from "@/pages/SavedMaps";
+import ViewMap from "@/pages/ViewMap";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -14,6 +15,7 @@ function Router() {
       <Route path={"/"} component={Home} />
       <Route path={"/editor"} component={RiskMapEditor} />
       <Route path={"/editor/:mapId"} component={RiskMapEditor} />
+      <Route path={"/view/:mapId"} component={ViewMap} />
       <Route path={"/maps"} component={SavedMaps} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}

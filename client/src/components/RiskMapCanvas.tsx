@@ -29,7 +29,7 @@ interface Risk {
   type: string;
   severity: string;
   label: string;
-  description: string;
+  description: string | null;
   xPosition: number;
   yPosition: number;
   radius: number;
@@ -41,6 +41,7 @@ interface RiskMapCanvasProps {
   risks: Risk[];                                         // Array de riscos a renderizar
   onRiskPositionChange: (riskId: number, x: number, y: number) => void; // Callback ao mover risco
   onRiskDelete: (riskId: number) => void;               // Callback ao deletar risco
+  isReadOnly?: boolean;                                  // Modo somente leitura (sem drag-and-drop)
 }
 
 // ============================================================================
@@ -52,6 +53,7 @@ export default function RiskMapCanvas({
   risks,
   onRiskPositionChange,
   onRiskDelete,
+  isReadOnly = false,
 }: RiskMapCanvasProps) {
   // ============================================================================
   // REFS (useRef) - Estado que não causa re-render
@@ -119,6 +121,7 @@ export default function RiskMapCanvas({
    */
   const handleMouseDown = useCallback(
     (e: React.MouseEvent, riskId: number) => {
+      if (isReadOnly) return; // Ignorar em modo read-only
       e.preventDefault();
       e.stopPropagation();
 
@@ -144,7 +147,7 @@ export default function RiskMapCanvas({
       setDraggingRiskId(riskId);
       setDragStartPos({ x: e.clientX, y: e.clientY });
     },
-    [risks]
+    [risks, isReadOnly]
   );
 
   /**
@@ -278,10 +281,12 @@ export default function RiskMapCanvas({
               transform: "translate(-50%, -50%)",
               
               // Mudar cursor durante drag
-              cursor: draggingRiskId === risk.id ? "grabbing" : "grab",
+              cursor: isReadOnly ? "default" : (draggingRiskId === risk.id ? "grabbing" : "grab"),
               
               // Evitar seleção de texto durante drag
               userSelect: "none",
+              // Desabilitar interação em modo read-only
+              pointerEvents: isReadOnly ? "none" : "auto",
               
               // Aumentar z-index durante drag para aparecer acima de outros
               zIndex: draggingRiskId === risk.id ? 50 : 10,
@@ -323,7 +328,7 @@ export default function RiskMapCanvas({
               Botão X aparece apenas quando risco está em hover
               Posicionado no canto superior direito do círculo
             */}
-            {hoveredRiskId === risk.id && (
+            {hoveredRiskId === risk.id && !isReadOnly && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();

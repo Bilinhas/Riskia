@@ -231,7 +231,7 @@ export const appRouter = router({
             type: obj.type as string,
             severity: obj.severity as string,
             label: obj.label as string,
-            description: obj.description as string,
+            description: (obj.description as string | null) || null,
             xPosition: obj.xPosition as number,
             yPosition: obj.yPosition as number,
             radius: (obj.radius as number) || 30,
