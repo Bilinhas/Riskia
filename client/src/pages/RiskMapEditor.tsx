@@ -602,7 +602,15 @@ export default function RiskMapEditor() {
                     </h2>
                     <div
                       ref={canvasRef}
-                      className="bg-white rounded-lg border border-border overflow-auto"
+                      className="bg-white rounded-lg border border-border w-full"
+                      style={{
+                        minHeight: 'auto',
+                        height: 'auto',
+                        overflow: 'visible',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
                     >
                       {/* Componente que renderiza SVG + círculos de risco com drag-and-drop */}
                       <RiskMapCanvas
