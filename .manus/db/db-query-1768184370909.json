@@ -1,9 +1,0 @@
-{
-  "query": "SELECT id, title, description, user_id FROM risk_maps WHERE id = 240007;",
-  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2T2SYvGVNnoiaRr.23c802b23975 --database GmCfpJwxhzxSUArerVDRgp --execute SELECT id, title, description, user_id FROM risk_maps WHERE id = 240007;",
-  "rows": [],
-  "messages": [],
-  "stdout": "",
-  "stderr": "",
-  "execution_time_ms": 895
-}
