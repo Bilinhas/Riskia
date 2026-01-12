@@ -793,11 +793,11 @@ function AddRiskForm({ onAdd, onCancel }: AddRiskFormProps) {
  */
 function getRiskColor(type: string): string {
   const colors: Record<string, string> = {
-    acidental: "#FF6B6B",    // Vermelho
-    chemical: "#FFD93D",      // Amarelo
-    ergonomic: "#6BCB77",     // Verde
-    physical: "#4D96FF",      // Azul
-    biological: "#FF6B9D",    // Rosa
+    physical: "#22C55E",      // Verde
+    ergonomic: "#EAB308",     // Amarelo
+    acidental: "#3B82F6",     // Azul
+    biological: "#92400E",    // Marrom
+    chemical: "#EF4444",      // Vermelho
   };
   return colors[type] || "#999999";
 }

@@ -161,11 +161,11 @@ function extractSvgElements(svg: string): string[] {
  */
 export function getRiskTypeColor(type: RiskType): string {
   const colors: Record<RiskType, string> = {
-    acidental: "#FF6B6B",
-    chemical: "#FFD93D",
-    ergonomic: "#6BCB77",
-    physical: "#4D96FF",
-    biological: "#FF6B9D",
+    physical: "#22C55E",      // Verde
+    ergonomic: "#EAB308",     // Amarelo
+    acidental: "#3B82F6",     // Azul
+    biological: "#92400E",    // Marrom
+    chemical: "#EF4444",      // Vermelho
   };
 
   return colors[type] || "#999999";
