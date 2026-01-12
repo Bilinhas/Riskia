@@ -236,7 +236,8 @@ export default function RiskMapCanvas({
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-96 bg-white rounded-lg overflow-hidden"
+      className="relative w-full bg-white rounded-lg overflow-auto"
+      style={{ minHeight: "600px" }}
     >
       {/* ======================================================================
           PLANTA BAIXA SVG
@@ -253,9 +254,23 @@ export default function RiskMapCanvas({
       */}
       <div
         dangerouslySetInnerHTML={{ __html: svg }}
-        className="w-full h-full"
-        style={{ pointerEvents: "none" }}
+        className="w-full"
+        style={{ 
+          pointerEvents: "none",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center"
+        }}
       />
+      
+      <style>{`
+        [data-riskmap-svg] svg {
+          width: 100%;
+          height: auto;
+          max-width: 100%;
+          display: block;
+        }
+      `}</style>
 
       {/* ======================================================================
           CÍRCULOS DE RISCO COM DRAG-AND-DROP
