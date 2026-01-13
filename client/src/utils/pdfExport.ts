@@ -233,9 +233,12 @@ async function captureMapAsImage(
           content: style.textContent,
         });
 
-        // Remover apenas linhas que contenham "oklch"
+        // Remover linhas que contenham "oklch"
         const lines = style.textContent.split('\n');
-        const filteredLines = lines.filter(line => !line.toLowerCase().includes('oklch'));
+        const filteredLines = lines.map(line => {
+          // Remover propriedades CSS que usem oklch
+          return line.replace(/[^:]*:\s*oklch\([^)]*\)[^;]*;?/gi, '');
+        }).filter(line => line.trim());
         style.textContent = filteredLines.join('\n');
       }
     });

@@ -312,6 +312,7 @@ export default function RiskMapCanvas({
             transformOrigin: "0 0",
             transition: draggingRiskId === null && panStateRef.current.isPanning === false ? "none" : "none",
             cursor: panStateRef.current.isPanning ? "grabbing" : "grab",
+            position: "relative",
           }}
         >
           {/* PLANTA BAIXA SVG */}
@@ -335,8 +336,8 @@ export default function RiskMapCanvas({
             }
           `}</style>
 
-          {/* CÍRCULOS DE RISCO COM DRAG-AND-DROP */}
-          <div className="absolute inset-0 pointer-events-none">
+          {/* CÍRCULOS DE RISCO COM DRAG-AND-DROP - DENTRO DO SVG CONTAINER */}
+          <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
             {risks.map((risk, index) => (
               <div
                 key={`risk-${risk.id}-${index}`}
