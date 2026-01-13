@@ -277,19 +277,7 @@ export default function RiskMapEditor() {
    * Usuário pode arrastar para posições diferentes
    */
   const generateDistributedPosition = (index: number, total: number) => {
-    // Usar dimensões do container visual, não do SVG
-    // Isso garante que os riscos apareçam no centro mesmo em mobile
-    if (containerRef.current) {
-      const containerWidth = containerRef.current.offsetWidth;
-      const containerHeight = containerRef.current.offsetHeight;
-      
-      return {
-        xPosition: containerWidth / 2,
-        yPosition: containerHeight / 2,
-      };
-    }
-    
-    // Fallback para dimensões do SVG se container não estiver disponível
+    // Centro do mapa
     const centerX = mapDimensions.width / 2;
     const centerY = mapDimensions.height / 2;
 

@@ -1,30 +1,22 @@
-import html2canvas from 'html2canvas';
-
 /**
  * Exporta o mapa de riscos como PNG
  * 
- * ESTRATÉGIA:
- * 1. Remove OKLCH de todos os stylesheets ANTES de capturar
- * 2. Clona o elemento do canvas (SVG + círculos)
- * 3. Captura com html2canvas em alta qualidade
- * 4. Restaura stylesheets originais
- * 5. Download automático do PNG
+ * Estratégia:
+ * 1. Captura o elemento do mapa usando html2canvas
+ * 2. Remove propriedades OKLCH do Tailwind CSS 4
+ * 3. Converte para PNG e faz download
  */
 export async function exportMapToPNG(
   mapContainerId: string,
   filename: string = 'mapa-risco.png'
 ): Promise<void> {
-  let originalStylesheets: { element: HTMLStyleElement; content: string }[] = [];
-  let clonedElement: HTMLElement | null = null;
-  let tempContainer: HTMLElement | null = null;
-
   try {
-    console.log('[PNG] Iniciando exportação de PNG...');
-
     const container = document.getElementById(mapContainerId);
     if (!container) {
       throw new Error('Elemento do mapa não encontrado');
     }
+
+    console.log('[PNG] Iniciando exportação de PNG...');
 
     // Encontrar o elemento do canvas (apenas o mapa, sem legenda)
     const canvasElement = container.querySelector('.bg-white.rounded-lg.border.border-border.overflow-auto');
@@ -34,8 +26,48 @@ export async function exportMapToPNG(
 
     console.log('[PNG] Canvas encontrado');
 
-    // PASSO 1: Remover OKLCH de TODOS os stylesheets
-    console.log('[PNG] Removendo OKLCH de todos os stylesheets...');
+    // Capturar o mapa como imagem
+    const pngData = await captureMapAsPNG(canvasElement as HTMLElement);
+    if (!pngData) {
+      throw new Error('Falha ao capturar mapa como PNG');
+    }
+
+    console.log('[PNG] Mapa capturado com sucesso');
+
+    // Criar link para download
+    const link = document.createElement('a');
+    link.href = pngData;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    console.log('[PNG] PNG exportado com sucesso');
+  } catch (error) {
+    console.error('[PNG] Erro ao exportar PNG:', error);
+    throw error;
+  }
+}
+
+/**
+ * Captura o mapa como imagem PNG
+ */
+async function captureMapAsPNG(
+  element: HTMLElement
+): Promise<string | null> {
+  let clonedElement: HTMLElement | null = null;
+  let tempContainer: HTMLElement | null = null;
+  const originalStylesheets: { element: HTMLStyleElement; content: string }[] = [];
+
+  try {
+    console.log('[PNG] Importando html2canvas...');
+    const { default: html2canvas } = await import('html2canvas');
+
+    console.log('[PNG] Elemento a capturar:', element);
+    console.log('[PNG] Dimensões do elemento:', element.scrollWidth, 'x', element.scrollHeight);
+
+    // PASSO 1: Remover apenas OKLCH dos stylesheets
+    console.log('[PNG] Removendo propriedades OKLCH dos stylesheets...');
     
     const allStyles = Array.from(document.querySelectorAll('style'));
     allStyles.forEach((style) => {
@@ -46,45 +78,37 @@ export async function exportMapToPNG(
           content: style.textContent,
         });
 
-        // Remover linhas que contenham "oklch"
+        // Remover apenas linhas que contenham "oklch"
         const lines = style.textContent.split('\n');
-        const filteredLines = lines.map(line => {
-          // Remover propriedades CSS que usem oklch
-          return line.replace(/[^:]*:\s*oklch\([^)]*\)[^;]*;?/gi, '');
-        }).filter(line => line.trim());
-        
+        const filteredLines = lines.filter(line => !line.toLowerCase().includes('oklch'));
         style.textContent = filteredLines.join('\n');
       }
     });
 
     // PASSO 2: Clonar o elemento
-    console.log('[PNG] Clonando elemento do canvas...');
-    clonedElement = canvasElement.cloneNode(true) as HTMLElement;
+    clonedElement = element.cloneNode(true) as HTMLElement;
 
     // PASSO 3: Remover OKLCH de estilos inline também
     console.log('[PNG] Removendo OKLCH de estilos inline...');
     removeOklchFromInlineStyles(clonedElement);
 
-    // PASSO 4: Criar container temporário
+    // PASSO 4: Criar container temporário com dimensões corretas
     tempContainer = document.createElement('div');
     tempContainer.style.position = 'fixed';
     tempContainer.style.left = '-9999px';
     tempContainer.style.top = '-9999px';
     tempContainer.style.zIndex = '-9999';
     tempContainer.style.backgroundColor = '#ffffff';
-    tempContainer.style.padding = '0';
-    tempContainer.style.margin = '0';
-    tempContainer.style.border = 'none';
     
-    // Preservar dimensões do canvas original
-    tempContainer.style.width = canvasElement.scrollWidth + 'px';
-    tempContainer.style.height = canvasElement.scrollHeight + 'px';
+    // Preservar dimensões originais
+    tempContainer.style.width = element.scrollWidth + 'px';
+    tempContainer.style.height = element.scrollHeight + 'px';
     
     tempContainer.appendChild(clonedElement);
     document.body.appendChild(tempContainer);
 
     // Aguardar um pouco para o DOM renderizar
-    await new Promise(resolve => setTimeout(resolve, 300));
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     console.log('[PNG] Capturando elemento com html2canvas...');
 
@@ -99,43 +123,27 @@ export async function exportMapToPNG(
       windowWidth: clonedElement.scrollWidth,
       foreignObjectRendering: false,
       ignoreElements: (element) => {
-        const tag = element.tagName;
-        return tag === 'SCRIPT' || tag === 'STYLE' || tag === 'META' || tag === 'LINK';
+        return element.tagName === 'SCRIPT' || element.tagName === 'STYLE';
       },
-      imageTimeout: 0,
     });
 
     console.log('[PNG] Canvas criado:', canvas.width, 'x', canvas.height);
 
-    // PASSO 6: Converter para blob e fazer download
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        throw new Error('Falha ao criar blob do canvas');
-      }
+    const imgData = canvas.toDataURL('image/png');
+    console.log('[PNG] Imagem convertida para data URL, tamanho:', imgData.length);
 
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-
-      console.log('[PNG] PNG exportado com sucesso');
-    }, 'image/png', 1);
-
+    return imgData;
   } catch (error) {
-    console.error('[PNG] Erro ao exportar PNG:', error);
-    throw error;
+    console.error('[PNG] Erro ao capturar mapa como imagem:', error);
+    return null;
   } finally {
-    // PASSO 7: Restaurar stylesheets originais
+    // PASSO 6: Restaurar stylesheets originais
     console.log('[PNG] Restaurando stylesheets originais...');
     originalStylesheets.forEach(({ element, content }) => {
       element.textContent = content;
     });
 
-    // PASSO 8: Limpar o clone do DOM
+    // PASSO 7: Limpar o clone do DOM
     if (tempContainer && tempContainer.parentElement) {
       try {
         tempContainer.parentElement.removeChild(tempContainer);
@@ -154,8 +162,9 @@ function removeOklchFromInlineStyles(element: HTMLElement | SVGElement): void {
     if (element.style && element.style.cssText) {
       let styleText = element.style.cssText;
       // Remover apenas propriedades que contenham oklch
-      styleText = styleText.replace(/[^:]*:\s*oklch\([^)]*\)[^;]*;?/gi, '');
-      element.style.cssText = styleText;
+      const properties = styleText.split(';');
+      const filteredProperties = properties.filter(prop => !prop.toLowerCase().includes('oklch'));
+      element.style.cssText = filteredProperties.join(';');
     }
   } catch (error) {
     console.debug('[PNG] Erro ao remover OKLCH de estilos inline:', error);
