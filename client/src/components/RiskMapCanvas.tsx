@@ -300,6 +300,7 @@ export default function RiskMapCanvas({
         >
           {/* PLANTA BAIXA SVG */}
           <div
+            data-riskmap-svg
             dangerouslySetInnerHTML={{ __html: svg }}
             className="w-full"
             style={{
