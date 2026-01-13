@@ -23,14 +23,13 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
-import { Loader2, Plus, Trash2, Share2, Download, Image } from "lucide-react";
+import { Loader2, Plus, Trash2, Share2, Download } from "lucide-react";
 import { toast } from "sonner";
 import RiskMapCanvas from "@/components/RiskMapCanvas";
 import RiskLegend from "@/components/RiskLegend";
 import Header from "@/components/Header";
 import { useLocation, useRoute } from "wouter";
 import { exportMapToPDF } from "@/utils/pdfExport";
-import { exportMapToPNG } from "@/utils/pngExport";
 
 
 // ============================================================================
@@ -470,28 +469,7 @@ export default function RiskMapEditor() {
     }
   };
 
-  const handleExportPNG = async () => {
-    if (!floorPlanSvg || !mapId) {
-      toast.error("Gere um mapa antes de exportar");
-      return;
-    }
-    
-    try {
-      setIsLoading(true);
-      const timestamp = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
-      const filename = `mapa-risco-${mapId}-${timestamp}.png`;
-      
-      // Captura elemento do DOM e gera PNG
-      await exportMapToPNG('map-canvas-container', filename);
-      
-      toast.success("PNG exportado com sucesso!");
-    } catch (error) {
-      console.error("Erro ao exportar PNG:", error);
-      toast.error("Erro ao exportar PNG");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+
 
   // ============================================================================
   // RENDERIZAÇÃO (JSX)
@@ -530,15 +508,6 @@ export default function RiskMapEditor() {
                 >
                   <Download className="w-4 h-4" />
                   Exportar PDF
-                </Button>
-                <Button
-                  onClick={handleExportPNG}
-                  disabled={isLoading}
-                  className="gap-2"
-                  variant="outline"
-                >
-                  <Image className="w-4 h-4" />
-                  Exportar PNG
                 </Button>
                 {mapId && (
                   <Button
