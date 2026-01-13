@@ -23,14 +23,13 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
-import { Loader2, Plus, Trash2, Share2, Download, Image as ImageIcon } from "lucide-react";
+import { Loader2, Plus, Trash2, Share2, Download } from "lucide-react";
 import { toast } from "sonner";
 import RiskMapCanvas from "@/components/RiskMapCanvas";
 import RiskLegend from "@/components/RiskLegend";
 import Header from "@/components/Header";
 import { useLocation, useRoute } from "wouter";
 import { exportMapToPDF } from "@/utils/pdfExport";
-import { exportMapToPNG } from "@/utils/pngExport";
 
 
 // ============================================================================
@@ -61,7 +60,6 @@ export default function RiskMapEditor() {
   // useRoute: Hook do Wouter para extrair parâmetros da URL
   // Exemplo: /editor/:mapId → params.mapId contém o ID do mapa
   const [, params] = useRoute("/editor/:mapId");
-  const [location] = useLocation();
   const existingMapId = params?.mapId ? parseInt(params.mapId) : null;
   
   // ============================================================================
@@ -96,9 +94,6 @@ export default function RiskMapEditor() {
   // isSaving: Indica se está salvando posições de riscos
   const [isSaving, setIsSaving] = useState(false);
   
-  // riskScaleFactor: Fator de escala para riscos responsivos
-  const [riskScaleFactor, setRiskScaleFactor] = useState(1);
-  
   // ============================================================================
   // REFS (useRef)
   // ============================================================================
@@ -109,9 +104,6 @@ export default function RiskMapEditor() {
   // pendingSavesRef: Rastreia quais riscos estão aguardando salvamento
   // Evita múltiplas requisições para o mesmo risco
   const pendingSavesRef = useRef<Set<number>>(new Set());
-  
-  // containerRef: Referência ao container para calcular escala responsiva
-  const containerRef = useRef<HTMLDivElement>(null);
   
   // ============================================================================
   // QUERIES E MUTATIONS (tRPC - Comunicação com API)
@@ -187,44 +179,6 @@ export default function RiskMapEditor() {
       pendingSavesRef.current.clear();
     };
   }, []);
-  
-  // Effect 3: Monitora mudanças de URL e recarrega dados se necessário
-  useEffect(() => {
-    // Se a URL mudou para uma nova rota /editor/:mapId, resetar estado
-    if (location.startsWith('/editor/') && !existingMapId) {
-      // Novo mapa
-      setDescription("");
-      setFloorPlanSvg(null);
-      setRisks([]);
-      setMapId(null);
-    }
-  }, [location, existingMapId]);
-
-  // Effect 4: Calcula fator de escala responsiva para riscos
-  useEffect(() => {
-    const calculateScaleFactor = () => {
-      if (!containerRef.current) return;
-      
-      const containerWidth = containerRef.current.offsetWidth;
-      const baseWidth = 1000;
-      
-      let factor = containerWidth / baseWidth;
-      factor = Math.max(0.5, Math.min(1.5, factor));
-      
-      setRiskScaleFactor(factor);
-    };
-    
-    calculateScaleFactor();
-    
-    const resizeObserver = new ResizeObserver(calculateScaleFactor);
-    if (containerRef.current) {
-      resizeObserver.observe(containerRef.current);
-    }
-    
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, []);
 
   // ============================================================================
   // FUNÇÕES DE NEGÓCIO
@@ -272,18 +226,34 @@ export default function RiskMapEditor() {
   );
 
   /**
-   * Gera posições para riscos no centro do mapa
-   * Todos os riscos aparecem no mesmo ponto central
-   * Usuário pode arrastar para posições diferentes
+   * Gera posições distribuídas para riscos evitar sobreposição
+   * Riscos aparecem no centro do mapa com pequenos offsets aleatórios
+   * para evitar sobreposição total
    */
   const generateDistributedPosition = (index: number, total: number) => {
     // Centro do mapa
     const centerX = mapDimensions.width / 2;
     const centerY = mapDimensions.height / 2;
+    
+    // Raio máximo de distribuição ao redor do centro (em pixels)
+    const maxRadius = 150;
+    
+    // Gerar posição em círculo ao redor do centro
+    // Usar índice para distribuir uniformemente
+    const angle = (index / total) * Math.PI * 2;
+    const distance = (index % 3 + 1) * (maxRadius / 3);
+    
+    const x = centerX + Math.cos(angle) * distance;
+    const y = centerY + Math.sin(angle) * distance;
+    
+    // Adicionar pequeno offset aleatório para evitar alinhamento perfeito
+    const randomOffset = 20;
+    const finalX = x + (Math.random() - 0.5) * randomOffset;
+    const finalY = y + (Math.random() - 0.5) * randomOffset;
 
     return {
-      xPosition: centerX,
-      yPosition: centerY,
+      xPosition: Math.max(50, Math.min(mapDimensions.width - 50, finalX)),
+      yPosition: Math.max(50, Math.min(mapDimensions.height - 50, finalY)),
     };
   };
 
@@ -515,28 +485,6 @@ export default function RiskMapEditor() {
     }
   };
 
-  const handleExportPNG = async () => {
-    if (!floorPlanSvg || !mapId) {
-      toast.error("Gere um mapa antes de exportar");
-      return;
-    }
-    
-    try {
-      setIsLoading(true);
-      const timestamp = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
-      const filename = `mapa-risco-${mapId}-${timestamp}.png`;
-      
-      await exportMapToPNG('map-canvas-container', filename);
-      
-      toast.success("PNG exportado com sucesso!");
-    } catch (error) {
-      console.error("Erro ao exportar PNG:", error);
-      toast.error("Erro ao exportar PNG");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   // ============================================================================
   // RENDERIZAÇÃO (JSX)
   // ============================================================================
@@ -575,15 +523,6 @@ export default function RiskMapEditor() {
                   <Download className="w-4 h-4" />
                   Exportar PDF
                 </Button>
-                <Button
-                  onClick={handleExportPNG}
-                  disabled={isLoading}
-                  className="gap-2"
-                  variant="outline"
-                >
-                  <ImageIcon className="w-4 h-4" />
-                  Exportar PNG
-                </Button>
                 {mapId && (
                   <Button
                     onClick={() => {
@@ -603,7 +542,7 @@ export default function RiskMapEditor() {
             )}
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" ref={containerRef}>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Seção de Input - Descrição do Ambiente */}
             <div className="lg:col-span-1">
               <Card className="p-6 sticky top-6">
@@ -674,10 +613,7 @@ export default function RiskMapEditor() {
                       {/* Componente que renderiza SVG + círculos de risco com drag-and-drop */}
                       <RiskMapCanvas
                         svg={floorPlanSvg}
-                        risks={risks.map(r => ({
-                          ...r,
-                          radius: r.radius * riskScaleFactor
-                        }))}
+                        risks={risks}
                         onRiskPositionChange={handleUpdateRiskPosition}
                         onRiskDelete={handleDeleteRisk}
                       />
