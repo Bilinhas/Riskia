@@ -22,13 +22,12 @@ interface MapData {
 /**
  * Exporta o mapa de riscos como PDF
  * 
- * SOLUÇÃO OTIMIZADA v3 (com suporte a produção):
- * 1. Captura apenas o canvas do mapa (sem legenda)
- * 2. Preserva proporções corretas do mapa
- * 3. Remove apenas propriedades CSS que contenham OKLCH
- * 4. Adiciona legenda separadamente no PDF
- * 5. Renderização em alta qualidade
- * 6. Fallback completo se captura falhar
+ * ESTRATÉGIA CORRIGIDA:
+ * 1. Captura o svgContainerRef (que contém SVG + riscos)
+ * 2. Remove transformações de zoom/pan para captura limpa
+ * 3. Garante que riscos sejam renderizados antes de capturar
+ * 4. Usa html2canvas com configurações otimizadas
+ * 5. Adiciona legenda em página separada
  */
 export async function exportMapToPDF(
   mapContainerId: string,
@@ -43,31 +42,30 @@ export async function exportMapToPDF(
 
     console.log('[PDF] Iniciando exportação de PDF...');
 
-    // Encontrar o elemento do canvas (apenas o mapa, sem legenda)
-    // Procurar pelo container do mapa que contém SVG e riscos
-    let canvasElement: HTMLElement | null = null;
+    // Encontrar o svgContainerRef que contém SVG + riscos
+    // Procurar por elemento que tem data-riskmap-svg dentro
     const svgElement = container.querySelector('[data-riskmap-svg]');
-    if (svgElement?.parentElement?.parentElement?.parentElement) {
-      canvasElement = svgElement.parentElement.parentElement.parentElement as HTMLElement;
-    }
-    if (!canvasElement) {
-      canvasElement = container.querySelector('.relative.w-full.bg-white') as HTMLElement;
-    }
-    if (!canvasElement) {
-      // Última tentativa: pegar o primeiro div com overflow-auto
-      canvasElement = container.querySelector('[style*="overflow"]') as HTMLElement;
-    }
-    if (!canvasElement) {
-      throw new Error('Elemento do canvas não encontrado');
+    if (!svgElement) {
+      throw new Error('SVG do mapa não encontrado');
     }
 
-    console.log('[PDF] Canvas encontrado');
+    // Subir até encontrar o svgContainerRef (que tem as transformações)
+    let svgContainer = svgElement.parentElement;
+    while (svgContainer && !svgContainer.querySelector('[data-riskmap-svg]')) {
+      svgContainer = svgContainer.parentElement;
+    }
+
+    if (!svgContainer) {
+      throw new Error('Container do SVG não encontrado');
+    }
+
+    console.log('[PDF] Container encontrado');
 
     // Capturar o mapa como imagem
     let mapImage: { data: string; width: number; height: number } | null = null;
     try {
       console.log('[PDF] Tentando capturar mapa como imagem...');
-      mapImage = await captureMapAsImage(canvasElement as HTMLElement);
+      mapImage = await captureMapAsImage(svgContainer as HTMLElement);
       if (mapImage) {
         console.log('[PDF] Mapa capturado com sucesso:', mapImage.width, 'x', mapImage.height);
       } else {
@@ -210,13 +208,12 @@ export async function exportMapToPDF(
 /**
  * Captura o mapa como imagem PNG
  * 
- * ESTRATÉGIA OTIMIZADA v3 (com suporte a produção):
- * 1. Clona apenas o elemento do canvas (sem legenda)
- * 2. Remove apenas propriedades CSS que contenham "oklch"
- * 3. Mantém proporções corretas do SVG
- * 4. Captura com html2canvas em alta qualidade
- * 5. Suporta ambientes de produção com configurações otimizadas
- * 6. Remove o clone
+ * ESTRATÉGIA CORRIGIDA:
+ * 1. Clona o svgContainer (que contém SVG + riscos)
+ * 2. Remove transformações de zoom/pan do clone
+ * 3. Remove OKLCH dos stylesheets
+ * 4. Captura com html2canvas
+ * 5. Restaura stylesheets originais
  */
 async function captureMapAsImage(
   element: HTMLElement
@@ -232,19 +229,16 @@ async function captureMapAsImage(
     console.log('[PDF] Elemento a capturar:', element);
     console.log('[PDF] Dimensões do elemento:', element.scrollWidth, 'x', element.scrollHeight);
 
-    // PASSO 1: Remover apenas OKLCH dos stylesheets
+    // PASSO 1: Remover OKLCH dos stylesheets
     console.log('[PDF] Removendo propriedades OKLCH dos stylesheets...');
     
     const allStyles = Array.from(document.querySelectorAll('style'));
     allStyles.forEach((style) => {
       if (style.textContent) {
-        // Guardar conteúdo original
         originalStylesheets.push({
           element: style,
           content: style.textContent,
         });
-
-        // Remover apenas linhas que contenham "oklch"
         const lines = style.textContent.split('\n');
         const filteredLines = lines.filter(line => !line.toLowerCase().includes('oklch'));
         style.textContent = filteredLines.join('\n');
@@ -254,45 +248,55 @@ async function captureMapAsImage(
     // PASSO 2: Clonar o elemento
     clonedElement = element.cloneNode(true) as HTMLElement;
 
-    // PASSO 3: Remover OKLCH de estilos inline também
+    // PASSO 3: Remover transformações de zoom/pan do clone
+    console.log('[PDF] Removendo transformações de zoom/pan...');
+    clonedElement.style.transform = 'none';
+    clonedElement.style.transformOrigin = 'unset';
+
+    // PASSO 4: Remover OKLCH de estilos inline também
     console.log('[PDF] Removendo OKLCH de estilos inline...');
     removeOklchFromInlineStyles(clonedElement);
 
-    // PASSO 4: Criar container temporário com dimensões corretas
+    // PASSO 5: Calcular dimensões do SVG dentro do clone
+    const svgInClone = clonedElement.querySelector('[data-riskmap-svg]');
+    let captureWidth = element.scrollWidth;
+    let captureHeight = element.scrollHeight;
+
+    if (svgInClone) {
+      const svgRect = svgInClone.getBoundingClientRect();
+      captureWidth = Math.max(svgRect.width, 800);
+      captureHeight = Math.max(svgRect.height, 600);
+      console.log('[PDF] Dimensões do SVG: ' + captureWidth + ' x ' + captureHeight);
+    }
+
+    // PASSO 6: Criar container temporário
     tempContainer = document.createElement('div');
     tempContainer.style.position = 'fixed';
     tempContainer.style.left = '-9999px';
     tempContainer.style.top = '-9999px';
     tempContainer.style.zIndex = '-9999';
     tempContainer.style.backgroundColor = '#ffffff';
-    
-    // Preservar dimensões originais
-    tempContainer.style.width = element.scrollWidth + 'px';
-    tempContainer.style.height = element.scrollHeight + 'px';
+    tempContainer.style.width = captureWidth + 'px';
+    tempContainer.style.height = captureHeight + 'px';
     
     tempContainer.appendChild(clonedElement);
     document.body.appendChild(tempContainer);
 
-    // Aguardar um pouco para o DOM renderizar
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // Aguardar renderização
+    await new Promise(resolve => setTimeout(resolve, 200));
 
     console.log('[PDF] Capturando elemento com html2canvas...');
 
-    // PASSO 5: Capturar com html2canvas
-    // Configurações otimizadas para ambientes de produção
+    // PASSO 7: Capturar com html2canvas
     const canvas = await html2canvas(clonedElement, {
       backgroundColor: '#ffffff',
       scale: 2,
       useCORS: true,
       allowTaint: true,
       logging: false,
-      windowHeight: clonedElement.scrollHeight,
-      windowWidth: clonedElement.scrollWidth,
+      windowHeight: captureHeight,
+      windowWidth: captureWidth,
       foreignObjectRendering: false,
-      ignoreElements: (element) => {
-        return element.tagName === 'SCRIPT' || element.tagName === 'STYLE';
-      },
-      // Configurações adicionais para produção
     });
 
     console.log('[PDF] Canvas criado:', canvas.width, 'x', canvas.height);
@@ -307,16 +311,15 @@ async function captureMapAsImage(
     };
   } catch (error) {
     console.error('[PDF] Erro ao capturar mapa como imagem:', error);
-    // Retornar null ao invés de lançar erro para permitir fallback
     return null;
   } finally {
-    // PASSO 6: Restaurar stylesheets originais
+    // PASSO 8: Restaurar stylesheets originais
     console.log('[PDF] Restaurando stylesheets originais...');
     originalStylesheets.forEach(({ element, content }) => {
       element.textContent = content;
     });
 
-    // PASSO 7: Limpar o clone do DOM
+    // PASSO 9: Limpar o clone do DOM
     if (tempContainer && tempContainer.parentElement) {
       try {
         tempContainer.parentElement.removeChild(tempContainer);
@@ -334,7 +337,6 @@ function removeOklchFromInlineStyles(element: HTMLElement | SVGElement): void {
   try {
     if (element.style && element.style.cssText) {
       let styleText = element.style.cssText;
-      // Remover apenas propriedades que contenham oklch
       const properties = styleText.split(';');
       const filteredProperties = properties.filter(prop => !prop.toLowerCase().includes('oklch'));
       element.style.cssText = filteredProperties.join(';');
@@ -343,7 +345,6 @@ function removeOklchFromInlineStyles(element: HTMLElement | SVGElement): void {
     console.debug('[PDF] Erro ao remover OKLCH de estilos inline:', error);
   }
 
-  // Processar filhos recursivamente
   try {
     Array.from(element.children).forEach((child) => {
       removeOklchFromInlineStyles(child as HTMLElement | SVGElement);
