@@ -1,4 +1,4 @@
-/**
+/*
  * ============================================================================
  * COMPONENTE: RiskMapCanvas - Canvas de Visualização de Mapa de Risco
  * ============================================================================
@@ -7,18 +7,20 @@
  * 1. Renderizar planta baixa SVG gerada pela IA
  * 2. Renderizar círculos de risco sobrepostos no SVG
  * 3. Implementar drag-and-drop para posicionar riscos
- * 4. Exibir tooltip com rótulo do risco ao passar mouse
- * 5. Permitir deletar risco ao clicar no botão X
+ * 4. Implementar zoom e pan para navegação
+ * 5. Exibir tooltip com rótulo do risco ao passar mouse
+ * 6. Permitir deletar risco ao clicar no botão X
  * 
  * Tecnologia:
- * - useRef: Rastrear estado do drag sem re-renders
- * - useState: Controlar estado visual (hover, dragging)
+ * - useRef: Rastrear estado do drag e zoom sem re-renders
+ * - useState: Controlar estado visual (hover, dragging, zoom, pan)
  * - useEffect: Gerenciar event listeners de mouse
- * - useCallback: Otimizar função de mouseDown
+ * - useCallback: Otimizar funções de mouse
  */
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { X } from "lucide-react";
+import { X, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 // ============================================================================
 // TIPOS E INTERFACES
@@ -60,20 +62,12 @@ export default function RiskMapCanvas({
   // ============================================================================
   
   // containerRef: Referência ao elemento DOM do container
-  // Usado para calcular posição do mouse relativa ao container
   const containerRef = useRef<HTMLDivElement>(null);
   
-  /**
-   * dragStateRef: Rastreia estado do drag-and-drop
-   * 
-   * Armazena:
-   * - riskId: ID do risco sendo arrastado
-   * - startX/startY: Posição inicial do mouse quando começou o drag
-   * - riskStartX/riskStartY: Posição inicial do risco quando começou o drag
-   * 
-   * Benefício: useRef não causa re-renders, apenas armazena dados
-   * Alternativa seria useState, mas causaria múltiplos re-renders durante drag
-   */
+  // svgContainerRef: Referência ao container do SVG para aplicar transformações
+  const svgContainerRef = useRef<HTMLDivElement>(null);
+  
+  // dragStateRef: Rastreia estado do drag-and-drop
   const dragStateRef = useRef<{
     riskId: number | null;
     startX: number;
@@ -88,124 +82,145 @@ export default function RiskMapCanvas({
     riskStartY: 0,
   });
 
+  // panStateRef: Rastreia estado do pan (movimento do mapa)
+  const panStateRef = useRef<{
+    isPanning: boolean;
+    startX: number;
+    startY: number;
+    startPanX: number;
+    startPanY: number;
+  }>({
+    isPanning: false,
+    startX: 0,
+    startY: 0,
+    startPanX: 0,
+    startPanY: 0,
+  });
+
   // ============================================================================
   // ESTADO LOCAL (useState) - Causa re-render
   // ============================================================================
   
   // draggingRiskId: ID do risco sendo arrastado (null se nenhum)
-  // Usado para mudar cursor e z-index durante drag
   const [draggingRiskId, setDraggingRiskId] = useState<number | null>(null);
   
-  // dragStartPos: Posição inicial do mouse (não usado mais, mantido para compatibilidade)
+  // dragStartPos: Posição inicial do mouse
   const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 });
   
   // hoveredRiskId: ID do risco sob o mouse
-  // Usado para mostrar tooltip e botão de delete
   const [hoveredRiskId, setHoveredRiskId] = useState<number | null>(null);
 
+  // zoom: Nível de zoom (1 = 100%, 2 = 200%, etc)
+  const [zoom, setZoom] = useState(1);
+
+  // pan: Deslocamento do mapa em pixels
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+
   // ============================================================================
-  // FUNÇÕES DE DRAG-AND-DROP
+  // FUNÇÕES DE ZOOM
   // ============================================================================
 
-  /**
-   * handleMouseDown: Inicia o drag de um risco
-   * 
-   * Fluxo:
-   * 1. Previne comportamento padrão do mouse
-   * 2. Encontra risco clicado no array
-   * 3. Armazena posição inicial do mouse e risco em dragStateRef
-   * 4. Marca risco como sendo arrastado
-   * 
-   * useCallback: Otimiza performance evitando recriação da função
-   * Dependências: [risks] - recria se array de riscos mudar
-   */
+  const handleZoomIn = () => {
+    setZoom(prev => Math.min(prev + 0.2, 3));
+  };
+
+  const handleZoomOut = () => {
+    setZoom(prev => Math.max(prev - 0.2, 0.5));
+  };
+
+  const handleResetZoom = () => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  };
+
+  // ============================================================================
+  // FUNÇÕES DE DRAG-AND-DROP DE RISCOS
+  // ============================================================================
+
   const handleMouseDown = useCallback(
     (e: React.MouseEvent, riskId: number) => {
-      if (isReadOnly) return; // Ignorar em modo read-only
+      if (isReadOnly) return;
       e.preventDefault();
       e.stopPropagation();
 
-      // Encontrar risco no array
       const risk = risks.find((r) => r.id === riskId);
       if (!risk) return;
 
-      // Obter dimensões do container para cálculos posteriores
       const rect = containerRef.current?.getBoundingClientRect();
       if (!rect) return;
 
-      // Armazenar estado do drag em useRef
-      // Isso permite rastrear movimento sem re-renders
       dragStateRef.current = {
         riskId,
-        startX: e.clientX,           // Posição X do mouse quando clicou
-        startY: e.clientY,           // Posição Y do mouse quando clicou
-        riskStartX: risk.xPosition,  // Posição X do risco quando clicou
-        riskStartY: risk.yPosition,  // Posição Y do risco quando clicou
+        startX: e.clientX,
+        startY: e.clientY,
+        riskStartX: risk.xPosition,
+        riskStartY: risk.yPosition,
       };
 
-      // Atualizar estado para mudar cursor e z-index
       setDraggingRiskId(riskId);
       setDragStartPos({ x: e.clientX, y: e.clientY });
     },
     [risks, isReadOnly]
   );
 
-  /**
-   * useEffect: Gerencia event listeners de mousemove e mouseup
-   * 
-   * Fluxo:
-   * 1. Quando draggingRiskId muda, adiciona listeners ao document
-   * 2. handleMouseMove: Calcula novo movimento e chama callback
-   * 3. handleMouseUp: Remove listeners quando mouse é solto
-   * 4. Cleanup: Remove listeners ao desmontar ou mudar dependências
-   * 
-   * Benefício: Event listeners no document permitem drag fora do container
-   * Sem isso, seria impossível arrastar rápido para fora da área
-   */
+  // ============================================================================
+  // FUNÇÕES DE PAN (MOVIMENTO DO MAPA)
+  // ============================================================================
+
+  const handleSvgMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      // Só fazer pan se não estiver arrastando um risco e não estiver em read-only
+      if (draggingRiskId !== null || isReadOnly) return;
+      
+      // Ignorar se clicou em um risco
+      const target = e.target as HTMLElement;
+      if (target.closest('[data-risk-circle]')) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      panStateRef.current = {
+        isPanning: true,
+        startX: e.clientX,
+        startY: e.clientY,
+        startPanX: pan.x,
+        startPanY: pan.y,
+      };
+    },
+    [draggingRiskId, isReadOnly, pan]
+  );
+
+  // ============================================================================
+  // EFEITO: Gerencia event listeners de mousemove e mouseup
+  // ============================================================================
+
   useEffect(() => {
-    // Se nenhum risco está sendo arrastado, não fazer nada
-    if (draggingRiskId === null) return;
-
-    /**
-     * handleMouseMove: Atualiza posição do risco durante o drag
-     * 
-     * Cálculo:
-     * 1. deltaX = posição atual do mouse - posição inicial do mouse
-     * 2. newX = posição inicial do risco + deltaX
-     * 3. Limita dentro dos limites do container
-     * 4. Chama callback com nova posição
-     */
     const handleMouseMove = (e: MouseEvent) => {
-      const state = dragStateRef.current;
-      if (state.riskId === null) return;
+      // Drag de risco
+      const dragState = dragStateRef.current;
+      if (dragState.riskId !== null) {
+        const deltaX = e.clientX - dragState.startX;
+        const deltaY = e.clientY - dragState.startY;
 
-      const rect = containerRef.current?.getBoundingClientRect();
-      if (!rect) return;
+        const newX = dragState.riskStartX + deltaX / zoom;
+        const newY = dragState.riskStartY + deltaY / zoom;
 
-      // Calcular diferença de movimento (delta)
-      const deltaX = e.clientX - state.startX;
-      const deltaY = e.clientY - state.startY;
+        onRiskPositionChange(dragState.riskId, newX, newY);
+      }
 
-      // Calcular nova posição baseada na posição inicial do risco
-      let newX = state.riskStartX + deltaX;
-      let newY = state.riskStartY + deltaY;
+      // Pan do mapa
+      const panState = panStateRef.current;
+      if (panState.isPanning) {
+        const deltaX = e.clientX - panState.startX;
+        const deltaY = e.clientY - panState.startY;
 
-      // Limitar dentro dos limites do container
-      // Evita que risco saia da área visível
-      newX = Math.max(0, Math.min(newX, rect.width));
-      newY = Math.max(0, Math.min(newY, rect.height));
-
-      // Chamar callback com nova posição
-      // Callback atualiza estado local em RiskMapEditor
-      // E marca para salvamento com debounce
-      onRiskPositionChange(state.riskId, newX, newY);
+        setPan({
+          x: panState.startPanX + deltaX,
+          y: panState.startPanY + deltaY,
+        });
+      }
     };
 
-    /**
-     * handleMouseUp: Finaliza o drag
-     * 
-     * Limpa estado do drag e remove listeners
-     */
     const handleMouseUp = () => {
       dragStateRef.current = {
         riskId: null,
@@ -214,163 +229,168 @@ export default function RiskMapCanvas({
         riskStartX: 0,
         riskStartY: 0,
       };
+      panStateRef.current.isPanning = false;
       setDraggingRiskId(null);
     };
 
-    // Adicionar listeners ao document (não ao container)
-    // Permite drag fora da área visível
+    const handleWheel = (e: WheelEvent) => {
+      // Só fazer zoom se o mouse está sobre o container
+      if (!containerRef.current?.contains(e.target as Node)) return;
+
+      e.preventDefault();
+      
+      // Zoom com scroll do mouse
+      const delta = e.deltaY > 0 ? -0.1 : 0.1;
+      setZoom(prev => Math.max(0.5, Math.min(3, prev + delta)));
+    };
+
     document.addEventListener("mousemove", handleMouseMove);
     document.addEventListener("mouseup", handleMouseUp);
+    containerRef.current?.addEventListener("wheel", handleWheel, { passive: false });
 
-    // Cleanup: Remover listeners ao desmontar ou mudar dependências
     return () => {
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
+      containerRef.current?.removeEventListener("wheel", handleWheel);
     };
-  }, [draggingRiskId, onRiskPositionChange]);
+  }, [onRiskPositionChange, zoom]);
 
   // ============================================================================
   // RENDERIZAÇÃO (JSX)
   // ============================================================================
 
   return (
-    <div
-      ref={containerRef}
-      className="relative w-full bg-white rounded-lg overflow-auto"
-      style={{ minHeight: "600px" }}
-    >
-      {/* ======================================================================
-          PLANTA BAIXA SVG
-          ====================================================================== */}
-      
-      {/* 
-        Renderiza SVG da planta baixa gerada pela IA
-        
-        dangerouslySetInnerHTML: Insere HTML bruto (SVG neste caso)
-        Necessário porque SVG é string gerada pela IA
-        
-        pointerEvents: none: Permite que cliques passem através do SVG
-        para os círculos de risco abaixo
-      */}
+    <div className="relative w-full bg-white rounded-lg overflow-hidden border border-border">
+      {/* Controles de zoom */}
+      <div className="absolute top-4 right-4 flex gap-2 z-20">
+        <Button
+          onClick={handleZoomIn}
+          size="sm"
+          variant="outline"
+          className="h-8 w-8 p-0"
+          title="Aumentar zoom (Scroll do mouse)"
+        >
+          <ZoomIn className="w-4 h-4" />
+        </Button>
+        <Button
+          onClick={handleZoomOut}
+          size="sm"
+          variant="outline"
+          className="h-8 w-8 p-0"
+          title="Diminuir zoom"
+        >
+          <ZoomOut className="w-4 h-4" />
+        </Button>
+        <Button
+          onClick={handleResetZoom}
+          size="sm"
+          variant="outline"
+          className="h-8 w-8 p-0"
+          title="Resetar zoom e pan"
+        >
+          <RotateCcw className="w-4 h-4" />
+        </Button>
+      </div>
+
+      {/* Indicador de zoom */}
+      <div className="absolute top-4 left-4 bg-background/80 px-3 py-1 rounded text-sm text-foreground z-20">
+        {Math.round(zoom * 100)}%
+      </div>
+
+      {/* Container principal com scroll */}
       <div
-        dangerouslySetInnerHTML={{ __html: svg }}
-        className="w-full"
-        style={{ 
-          pointerEvents: "none",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center"
-        }}
-      />
-      
-      <style>{`
-        [data-riskmap-svg] svg {
-          width: 100%;
-          height: auto;
-          max-width: 100%;
-          display: block;
-        }
-      `}</style>
-
-      {/* ======================================================================
-          CÍRCULOS DE RISCO COM DRAG-AND-DROP
-          ====================================================================== */}
-      
-      {/* 
-        Container absoluto que sobrepõe o SVG
-        pointer-events-none: Desativa cliques no container
-        pointer-events-auto nos filhos: Reativa cliques nos círculos
-      */}
-      <div className="absolute inset-0 pointer-events-none">
-        {/* Renderizar cada risco como círculo posicionado */}
-        {risks.map((risk, index) => (
+        ref={containerRef}
+        className="relative w-full bg-white overflow-auto"
+        style={{ minHeight: "600px" }}
+        onMouseDown={handleSvgMouseDown}
+      >
+        {/* Container do SVG com transformações */}
+        <div
+          ref={svgContainerRef}
+          style={{
+            transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)`,
+            transformOrigin: "0 0",
+            transition: draggingRiskId === null && panStateRef.current.isPanning === false ? "none" : "none",
+            cursor: panStateRef.current.isPanning ? "grabbing" : "grab",
+          }}
+        >
+          {/* PLANTA BAIXA SVG */}
           <div
-            key={`risk-${risk.id}-${index}`}
-            className="absolute pointer-events-auto group"
+            dangerouslySetInnerHTML={{ __html: svg }}
+            className="w-full"
             style={{
-              // Posicionar círculo no mapa
-              left: `${risk.xPosition}px`,
-              top: `${risk.yPosition}px`,
-              
-              // Centralizar círculo na posição (translate -50%)
-              transform: "translate(-50%, -50%)",
-              
-              // Mudar cursor durante drag
-              cursor: isReadOnly ? "default" : (draggingRiskId === risk.id ? "grabbing" : "grab"),
-              
-              // Evitar seleção de texto durante drag
-              userSelect: "none",
-              // Desabilitar interação em modo read-only
-              pointerEvents: isReadOnly ? "none" : "auto",
-              
-              // Aumentar z-index durante drag para aparecer acima de outros
-              zIndex: draggingRiskId === risk.id ? 50 : 10,
+              pointerEvents: "none",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
-            
-            // Event handlers
-            onMouseDown={(e) => handleMouseDown(e, risk.id)}
-            onMouseEnter={() => setHoveredRiskId(risk.id)}
-            onMouseLeave={() => setHoveredRiskId(null)}
-          >
-            {/* ================================================================
-                CÍRCULO DE RISCO
-                ================================================================ */}
-            
-            {/* 
-              Círculo colorido representando o risco
-              
-              Tamanho: radius * 2 (diâmetro)
-              Cor: Baseada no tipo de risco
-              Opacidade: 0.7 normal, 0.9 durante drag
-              Sombra: Efeito visual com cor do risco
-            */}
-            <div
-              className="rounded-full border-2 border-white shadow-lg transition-all duration-200 hover:scale-110"
-              style={{
-                width: `${risk.radius * 2}px`,
-                height: `${risk.radius * 2}px`,
-                backgroundColor: risk.color,
-                opacity: draggingRiskId === risk.id ? 0.9 : 0.7,
-                boxShadow: `0 4px 12px ${risk.color}40`,
-              }}
-            />
+          />
 
-            {/* ================================================================
-                BOTÃO DE DELETE (Aparece ao passar mouse)
-                ================================================================ */}
-            
-            {/* 
-              Botão X aparece apenas quando risco está em hover
-              Posicionado no canto superior direito do círculo
-            */}
-            {hoveredRiskId === risk.id && !isReadOnly && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRiskDelete(risk.id);
+          <style>{`
+            [data-riskmap-svg] svg {
+              width: 100%;
+              height: auto;
+              max-width: 100%;
+              display: block;
+            }
+          `}</style>
+
+          {/* CÍRCULOS DE RISCO COM DRAG-AND-DROP */}
+          <div className="absolute inset-0 pointer-events-none">
+            {risks.map((risk, index) => (
+              <div
+                key={`risk-${risk.id}-${index}`}
+                className="absolute pointer-events-auto group"
+                data-risk-circle
+                style={{
+                  left: `${risk.xPosition}px`,
+                  top: `${risk.yPosition}px`,
+                  transform: "translate(-50%, -50%)",
+                  cursor: isReadOnly ? "default" : (draggingRiskId === risk.id ? "grabbing" : "grab"),
+                  userSelect: "none",
+                  pointerEvents: isReadOnly ? "none" : "auto",
+                  zIndex: draggingRiskId === risk.id ? 50 : 10,
                 }}
-                className="absolute -top-3 -right-3 bg-destructive text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                title="Remover risco"
+                onMouseDown={(e) => handleMouseDown(e, risk.id)}
+                onMouseEnter={() => setHoveredRiskId(risk.id)}
+                onMouseLeave={() => setHoveredRiskId(null)}
               >
-                <X size={14} />
-              </button>
-            )}
+                {/* CÍRCULO DE RISCO */}
+                <div
+                  className="rounded-full border-2 border-white shadow-lg transition-all duration-200 hover:scale-110"
+                  style={{
+                    width: `${risk.radius * 2}px`,
+                    height: `${risk.radius * 2}px`,
+                    backgroundColor: risk.color,
+                    opacity: draggingRiskId === risk.id ? 0.9 : 0.7,
+                    boxShadow: `0 4px 12px ${risk.color}40`,
+                  }}
+                />
 
-            {/* ================================================================
-                TOOLTIP COM RÓTULO DO RISCO
-                ================================================================ */}
-            
-            {/* 
-              Tooltip aparece acima do círculo quando em hover
-              Mostra o rótulo do risco (ex: "Falta de iluminação")
-            */}
-            {hoveredRiskId === risk.id && (
-              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 bg-foreground text-background px-3 py-2 rounded-md text-xs whitespace-nowrap pointer-events-none z-10">
-                {risk.label}
+                {/* BOTÃO DE DELETE */}
+                {hoveredRiskId === risk.id && !isReadOnly && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRiskDelete(risk.id);
+                    }}
+                    className="absolute -top-3 -right-3 bg-destructive text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Remover risco"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+
+                {/* TOOLTIP COM RÓTULO DO RISCO */}
+                {hoveredRiskId === risk.id && (
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 bg-foreground text-background px-3 py-2 rounded-md text-xs whitespace-nowrap pointer-events-none z-10">
+                    {risk.label}
+                  </div>
+                )}
               </div>
-            )}
+            ))}
           </div>
-        ))}
+        </div>
       </div>
     </div>
   );

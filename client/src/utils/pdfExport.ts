@@ -22,13 +22,14 @@ interface MapData {
 /**
  * Exporta o mapa de riscos como PDF
  * 
- * SOLUÇÃO OTIMIZADA v3 (com suporte a produção):
+ * SOLUÇÃO OTIMIZADA v4 (com suporte robusto a produção):
  * 1. Captura apenas o canvas do mapa (sem legenda)
  * 2. Preserva proporções corretas do mapa
  * 3. Remove apenas propriedades CSS que contenham OKLCH
  * 4. Adiciona legenda separadamente no PDF
  * 5. Renderização em alta qualidade
  * 6. Fallback completo se captura falhar
+ * 7. Suporte melhorado para ambientes de produção com CORS
  */
 export async function exportMapToPDF(
   mapContainerId: string,
@@ -89,7 +90,7 @@ export async function exportMapToPDF(
       month: 'long',
       day: 'numeric',
     });
-    pdf.text(`Data: ${formattedDate}`, 10, yPosition);
+    pdf.text('Data: ' + formattedDate, 10, yPosition);
     yPosition += 8;
 
     // Adicionar descrição
@@ -198,7 +199,7 @@ export async function exportMapToPDF(
 /**
  * Captura o mapa como imagem PNG
  * 
- * ESTRATÉGIA OTIMIZADA v3 (com suporte a produção):
+ * ESTRATÉGIA OTIMIZADA v4 (com suporte robusto a produção):
  * 1. Clona apenas o elemento do canvas (sem legenda)
  * 2. Remove apenas propriedades CSS que contenham "oklch"
  * 3. Mantém proporções corretas do SVG
@@ -253,6 +254,9 @@ async function captureMapAsImage(
     tempContainer.style.top = '-9999px';
     tempContainer.style.zIndex = '-9999';
     tempContainer.style.backgroundColor = '#ffffff';
+    tempContainer.style.padding = '0';
+    tempContainer.style.margin = '0';
+    tempContainer.style.border = 'none';
     
     // Preservar dimensões originais
     tempContainer.style.width = element.scrollWidth + 'px';
@@ -262,7 +266,7 @@ async function captureMapAsImage(
     document.body.appendChild(tempContainer);
 
     // Aguardar um pouco para o DOM renderizar
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => setTimeout(resolve, 200));
 
     console.log('[PDF] Capturando elemento com html2canvas...');
 
@@ -278,9 +282,11 @@ async function captureMapAsImage(
       windowWidth: clonedElement.scrollWidth,
       foreignObjectRendering: false,
       ignoreElements: (element) => {
-        return element.tagName === 'SCRIPT' || element.tagName === 'STYLE';
+        const tag = element.tagName;
+        return tag === 'SCRIPT' || tag === 'STYLE' || tag === 'META' || tag === 'LINK';
       },
       // Configurações adicionais para produção
+      imageTimeout: 0, // Sem timeout para imagens
     });
 
     console.log('[PDF] Canvas criado:', canvas.width, 'x', canvas.height);
