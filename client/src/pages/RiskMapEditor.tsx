@@ -1,4 +1,4 @@
-/**
+/*
  * ============================================================================
  * PÁGINA: RiskMapEditor - Editor de Mapas de Risco Ocupacional
  * ============================================================================
@@ -227,27 +227,33 @@ export default function RiskMapEditor() {
 
   /**
    * Gera posições distribuídas para riscos evitar sobreposição
-   * Usa grid com variação aleatória para melhor distribuição visual
+   * Riscos aparecem no centro do mapa com pequenos offsets aleatórios
+   * para evitar sobreposição total
    */
   const generateDistributedPosition = (index: number, total: number) => {
-    const padding = 100;
-    const availableWidth = mapDimensions.width - padding * 2;
-    const availableHeight = mapDimensions.height - padding * 2;
-
-    // Criar grid de posições
-    const cols = Math.ceil(Math.sqrt(total));
-    const cellWidth = availableWidth / cols;
-    const cellHeight = availableHeight / Math.ceil(total / cols);
-
-    const col = index % cols;
-    const row = Math.floor(index / cols);
-
-    const x = padding + col * cellWidth + cellWidth / 2 + (Math.random() - 0.5) * 40;
-    const y = padding + row * cellHeight + cellHeight / 2 + (Math.random() - 0.5) * 40;
+    // Centro do mapa
+    const centerX = mapDimensions.width / 2;
+    const centerY = mapDimensions.height / 2;
+    
+    // Raio máximo de distribuição ao redor do centro (em pixels)
+    const maxRadius = 150;
+    
+    // Gerar posição em círculo ao redor do centro
+    // Usar índice para distribuir uniformemente
+    const angle = (index / total) * Math.PI * 2;
+    const distance = (index % 3 + 1) * (maxRadius / 3);
+    
+    const x = centerX + Math.cos(angle) * distance;
+    const y = centerY + Math.sin(angle) * distance;
+    
+    // Adicionar pequeno offset aleatório para evitar alinhamento perfeito
+    const randomOffset = 20;
+    const finalX = x + (Math.random() - 0.5) * randomOffset;
+    const finalY = y + (Math.random() - 0.5) * randomOffset;
 
     return {
-      xPosition: Math.max(50, Math.min(mapDimensions.width - 50, x)),
-      yPosition: Math.max(50, Math.min(mapDimensions.height - 50, y)),
+      xPosition: Math.max(50, Math.min(mapDimensions.width - 50, finalX)),
+      yPosition: Math.max(50, Math.min(mapDimensions.height - 50, finalY)),
     };
   };
 

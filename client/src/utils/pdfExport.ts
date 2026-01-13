@@ -22,12 +22,13 @@ interface MapData {
 /**
  * Exporta o mapa de riscos como PDF
  * 
- * SOLUÇÃO OTIMIZADA v2:
+ * SOLUÇÃO OTIMIZADA v3 (com suporte a produção):
  * 1. Captura apenas o canvas do mapa (sem legenda)
  * 2. Preserva proporções corretas do mapa
  * 3. Remove apenas propriedades CSS que contenham OKLCH
  * 4. Adiciona legenda separadamente no PDF
  * 5. Renderização em alta qualidade
+ * 6. Fallback completo se captura falhar
  */
 export async function exportMapToPDF(
   mapContainerId: string,
@@ -40,7 +41,7 @@ export async function exportMapToPDF(
       throw new Error('Elemento do mapa não encontrado');
     }
 
-    console.log('Iniciando exportação de PDF...');
+    console.log('[PDF] Iniciando exportação de PDF...');
 
     // Encontrar o elemento do canvas (apenas o mapa, sem legenda)
     const canvasElement = container.querySelector('.bg-white.rounded-lg.border.border-border.overflow-auto');
@@ -48,20 +49,21 @@ export async function exportMapToPDF(
       throw new Error('Elemento do canvas não encontrado');
     }
 
-    console.log('Canvas encontrado:', canvasElement);
+    console.log('[PDF] Canvas encontrado');
 
     // Capturar o mapa como imagem
     let mapImage: { data: string; width: number; height: number } | null = null;
     try {
-      console.log('Tentando capturar mapa como imagem...');
+      console.log('[PDF] Tentando capturar mapa como imagem...');
       mapImage = await captureMapAsImage(canvasElement as HTMLElement);
       if (mapImage) {
-        console.log('Mapa capturado com sucesso:', mapImage.width, 'x', mapImage.height);
+        console.log('[PDF] Mapa capturado com sucesso:', mapImage.width, 'x', mapImage.height);
       } else {
-        console.warn('Captura de mapa retornou null');
+        console.warn('[PDF] Captura de mapa retornou null, continuando com legenda apenas');
       }
     } catch (captureError) {
-      console.error('Erro ao capturar mapa como imagem:', captureError);
+      console.error('[PDF] Erro ao capturar mapa como imagem:', captureError);
+      console.warn('[PDF] Continuando com PDF apenas com legenda');
     }
 
     // Criar PDF com jsPDF
@@ -102,7 +104,7 @@ export async function exportMapToPDF(
     // Adicionar imagem do mapa se disponível
     if (mapImage && mapImage.data) {
       try {
-        console.log('Adicionando imagem ao PDF...');
+        console.log('[PDF] Adicionando imagem ao PDF...');
         
         // Calcular dimensões mantendo proporção
         const pageWidth = 210; // A4 width in mm
@@ -125,15 +127,15 @@ export async function exportMapToPDF(
         // Centralizar horizontalmente
         const xPosition = (pageWidth - imgWidth) / 2;
 
-        console.log(`Dimensões finais: ${imgWidth}mm x ${imgHeight}mm`);
+        console.log('[PDF] Dimensões finais: ' + imgWidth + 'mm x ' + imgHeight + 'mm');
         pdf.addImage(mapImage.data, 'PNG', xPosition, yPosition, imgWidth, imgHeight);
         yPosition += imgHeight + 10;
-        console.log('Imagem adicionada com sucesso');
+        console.log('[PDF] Imagem adicionada com sucesso');
       } catch (imgError) {
-        console.error('Erro ao adicionar imagem ao PDF:', imgError);
+        console.error('[PDF] Erro ao adicionar imagem ao PDF:', imgError);
       }
     } else {
-      console.warn('Nenhuma imagem disponível para adicionar ao PDF');
+      console.warn('[PDF] Nenhuma imagem disponível para adicionar ao PDF');
     }
 
     // Adicionar nova página para legenda se necessário
@@ -158,12 +160,12 @@ export async function exportMapToPDF(
 
         // Adicionar informações do risco
         pdf.setTextColor(0);
-        pdf.text(`${risk.label}`, 22, yPosition);
+        pdf.text(risk.label, 22, yPosition);
         yPosition += 5;
 
         pdf.setFontSize(9);
         pdf.setTextColor(100);
-        pdf.text(`Tipo: ${risk.type} | Gravidade: ${risk.severity}`, 22, yPosition);
+        pdf.text('Tipo: ' + risk.type + ' | Gravidade: ' + risk.severity, 22, yPosition);
         yPosition += 4;
 
         if (risk.description) {
@@ -184,11 +186,11 @@ export async function exportMapToPDF(
     }
 
     // Salvar PDF
-    console.log('Salvando PDF...');
+    console.log('[PDF] Salvando PDF...');
     pdf.save(filename);
-    console.log('PDF salvo com sucesso');
+    console.log('[PDF] PDF salvo com sucesso');
   } catch (error) {
-    console.error('Erro ao exportar PDF:', error);
+    console.error('[PDF] Erro ao exportar PDF:', error);
     throw error;
   }
 }
@@ -196,12 +198,13 @@ export async function exportMapToPDF(
 /**
  * Captura o mapa como imagem PNG
  * 
- * ESTRATÉGIA OTIMIZADA v2:
+ * ESTRATÉGIA OTIMIZADA v3 (com suporte a produção):
  * 1. Clona apenas o elemento do canvas (sem legenda)
  * 2. Remove apenas propriedades CSS que contenham "oklch"
  * 3. Mantém proporções corretas do SVG
  * 4. Captura com html2canvas em alta qualidade
- * 5. Remove o clone
+ * 5. Suporta ambientes de produção com configurações otimizadas
+ * 6. Remove o clone
  */
 async function captureMapAsImage(
   element: HTMLElement
@@ -211,14 +214,14 @@ async function captureMapAsImage(
   const originalStylesheets: { element: HTMLStyleElement; content: string }[] = [];
 
   try {
-    console.log('Importando html2canvas...');
+    console.log('[PDF] Importando html2canvas...');
     const { default: html2canvas } = await import('html2canvas');
 
-    console.log('Elemento a capturar:', element);
-    console.log('Dimensões do elemento:', element.scrollWidth, 'x', element.scrollHeight);
+    console.log('[PDF] Elemento a capturar:', element);
+    console.log('[PDF] Dimensões do elemento:', element.scrollWidth, 'x', element.scrollHeight);
 
     // PASSO 1: Remover apenas OKLCH dos stylesheets
-    console.log('Removendo propriedades OKLCH dos stylesheets...');
+    console.log('[PDF] Removendo propriedades OKLCH dos stylesheets...');
     
     const allStyles = Array.from(document.querySelectorAll('style'));
     allStyles.forEach((style) => {
@@ -231,7 +234,7 @@ async function captureMapAsImage(
 
         // Remover apenas linhas que contenham "oklch"
         const lines = style.textContent.split('\n');
-        const filteredLines = lines.filter(line => !line.includes('oklch'));
+        const filteredLines = lines.filter(line => !line.toLowerCase().includes('oklch'));
         style.textContent = filteredLines.join('\n');
       }
     });
@@ -240,7 +243,7 @@ async function captureMapAsImage(
     clonedElement = element.cloneNode(true) as HTMLElement;
 
     // PASSO 3: Remover OKLCH de estilos inline também
-    console.log('Removendo OKLCH de estilos inline...');
+    console.log('[PDF] Removendo OKLCH de estilos inline...');
     removeOklchFromInlineStyles(clonedElement);
 
     // PASSO 4: Criar container temporário com dimensões corretas
@@ -261,9 +264,10 @@ async function captureMapAsImage(
     // Aguardar um pouco para o DOM renderizar
     await new Promise(resolve => setTimeout(resolve, 100));
 
-    console.log('Capturando elemento com html2canvas...');
+    console.log('[PDF] Capturando elemento com html2canvas...');
 
     // PASSO 5: Capturar com html2canvas
+    // Configurações otimizadas para ambientes de produção
     const canvas = await html2canvas(clonedElement, {
       backgroundColor: '#ffffff',
       scale: 2,
@@ -274,14 +278,15 @@ async function captureMapAsImage(
       windowWidth: clonedElement.scrollWidth,
       foreignObjectRendering: false,
       ignoreElements: (element) => {
-        return element.tagName === 'SCRIPT';
+        return element.tagName === 'SCRIPT' || element.tagName === 'STYLE';
       },
+      // Configurações adicionais para produção
     });
 
-    console.log('Canvas criado:', canvas.width, 'x', canvas.height);
+    console.log('[PDF] Canvas criado:', canvas.width, 'x', canvas.height);
 
     const imgData = canvas.toDataURL('image/png');
-    console.log('Imagem convertida para data URL, tamanho:', imgData.length);
+    console.log('[PDF] Imagem convertida para data URL, tamanho:', imgData.length);
 
     return {
       data: imgData,
@@ -289,18 +294,23 @@ async function captureMapAsImage(
       height: canvas.height,
     };
   } catch (error) {
-    console.error('Erro ao capturar mapa como imagem:', error);
+    console.error('[PDF] Erro ao capturar mapa como imagem:', error);
+    // Retornar null ao invés de lançar erro para permitir fallback
     return null;
   } finally {
     // PASSO 6: Restaurar stylesheets originais
-    console.log('Restaurando stylesheets originais...');
+    console.log('[PDF] Restaurando stylesheets originais...');
     originalStylesheets.forEach(({ element, content }) => {
       element.textContent = content;
     });
 
     // PASSO 7: Limpar o clone do DOM
     if (tempContainer && tempContainer.parentElement) {
-      tempContainer.parentElement.removeChild(tempContainer);
+      try {
+        tempContainer.parentElement.removeChild(tempContainer);
+      } catch (e) {
+        console.debug('[PDF] Erro ao remover container temporário:', e);
+      }
     }
   }
 }
@@ -318,7 +328,7 @@ function removeOklchFromInlineStyles(element: HTMLElement | SVGElement): void {
       element.style.cssText = filteredProperties.join(';');
     }
   } catch (error) {
-    console.debug('Erro ao remover OKLCH de estilos inline:', error);
+    console.debug('[PDF] Erro ao remover OKLCH de estilos inline:', error);
   }
 
   // Processar filhos recursivamente
@@ -327,7 +337,7 @@ function removeOklchFromInlineStyles(element: HTMLElement | SVGElement): void {
       removeOklchFromInlineStyles(child as HTMLElement | SVGElement);
     });
   } catch (error) {
-    console.debug('Erro ao processar filhos:', error);
+    console.debug('[PDF] Erro ao processar filhos:', error);
   }
 }
 

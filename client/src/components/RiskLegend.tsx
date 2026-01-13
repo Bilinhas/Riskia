@@ -37,7 +37,7 @@ export default function RiskLegend({ risks, onDeleteRisk, isReadOnly = false }: 
       {risks.map((risk, index) => (
         <div
           key={`risk-legend-${risk.id}-${index}`}
-          className="flex items-center gap-4 p-3 bg-muted rounded-lg hover:bg-muted/80 transition-colors"
+          className="flex flex-col sm:flex-row sm:items-start gap-3 p-4 bg-muted rounded-lg hover:bg-muted/80 transition-colors"
         >
           {/* Color Circle */}
           <div
@@ -51,16 +51,16 @@ export default function RiskLegend({ risks, onDeleteRisk, isReadOnly = false }: 
           />
 
           {/* Risk Info */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="font-medium text-foreground truncate">
+          <div className="flex-1 min-w-0 w-full">
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <h3 className="font-medium text-foreground">
                 {risk.label}
               </h3>
-              <span className="text-xs px-2 py-1 bg-background rounded text-foreground whitespace-nowrap">
+              <span className="text-xs px-2 py-1 bg-background rounded text-foreground">
                 {typeLabels[risk.type] || risk.type}
               </span>
               <span
-                className={`text-xs px-2 py-1 rounded whitespace-nowrap ${getSeverityBadgeClass(
+                className={`text-xs px-2 py-1 rounded ${getSeverityBadgeClass(
                   risk.severity
                 )}`}
               >
@@ -68,7 +68,7 @@ export default function RiskLegend({ risks, onDeleteRisk, isReadOnly = false }: 
               </span>
             </div>
             {risk.description && (
-              <p className="text-sm text-muted-foreground line-clamp-2">
+              <p className="text-sm text-muted-foreground break-words whitespace-normal">
                 {risk.description}
               </p>
             )}
@@ -78,7 +78,7 @@ export default function RiskLegend({ risks, onDeleteRisk, isReadOnly = false }: 
           {!isReadOnly && (
             <button
               onClick={() => onDeleteRisk(risk.id)}
-              className="flex-shrink-0 p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+              className="flex-shrink-0 p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors self-start sm:self-auto"
               title="Remover risco"
             >
               <Trash2 size={18} />
