@@ -15,40 +15,75 @@ export async function exportMapToPNG(
 
     console.log('[PNG] Iniciando exportação...');
 
-    // Encontrar o elemento do canvas
-    const canvasElement = container.querySelector('.bg-white.rounded-lg.border.border-border');
+    // Encontrar o elemento do canvas que contém SVG e riscos
+    let canvasElement: HTMLElement | null = null;
+    const svgElement = container.querySelector('[data-riskmap-svg]');
+    if (svgElement?.parentElement?.parentElement?.parentElement) {
+      canvasElement = svgElement.parentElement.parentElement.parentElement as HTMLElement;
+    }
+    if (!canvasElement) {
+      canvasElement = container.querySelector('.relative.w-full.bg-white') as HTMLElement;
+    }
     if (!canvasElement) {
       throw new Error('Elemento do canvas não encontrado');
     }
 
-    // Capturar com html2canvas
-    const canvas = await html2canvas(canvasElement as HTMLElement, {
-      backgroundColor: '#ffffff',
-      scale: 2,
-      useCORS: true,
-      allowTaint: true,
-      logging: false,
+    console.log('[PNG] Canvas encontrado');
+
+    // Remover OKLCH dos stylesheets antes de capturar
+    const originalStylesheets: { element: HTMLStyleElement; content: string }[] = [];
+    const allStyles = Array.from(document.querySelectorAll('style'));
+    allStyles.forEach((style) => {
+      if (style.textContent) {
+        originalStylesheets.push({
+          element: style,
+          content: style.textContent,
+        });
+        const lines = style.textContent.split('\n');
+        const filteredLines = lines.filter(line => !line.toLowerCase().includes('oklch'));
+        style.textContent = filteredLines.join('\n');
+      }
     });
 
-    console.log('[PNG] Canvas criado com sucesso');
+    try {
+      console.log('[PNG] Capturando mapa com html2canvas...');
+      
+      const canvas = await html2canvas(canvasElement, {
+        backgroundColor: '#ffffff',
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        logging: false,
+        windowHeight: canvasElement.scrollHeight,
+        windowWidth: canvasElement.scrollWidth,
+      });
 
-    // Converter para blob e fazer download
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        throw new Error('Falha ao criar blob');
-      }
+      console.log('[PNG] Canvas criado com sucesso');
 
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      // Converter para blob e fazer download
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          throw new Error('Falha ao criar blob');
+        }
 
-      console.log('[PNG] PNG exportado com sucesso');
-    }, 'image/png');
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        console.log('[PNG] PNG exportado com sucesso');
+      }, 'image/png');
+
+    } finally {
+      // Restaurar stylesheets originais
+      originalStylesheets.forEach(({ element, content }) => {
+        element.textContent = content;
+      });
+    }
 
   } catch (error) {
     console.error('[PNG] Erro ao exportar PNG:', error);

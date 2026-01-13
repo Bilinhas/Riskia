@@ -44,7 +44,19 @@ export async function exportMapToPDF(
     console.log('[PDF] Iniciando exportação de PDF...');
 
     // Encontrar o elemento do canvas (apenas o mapa, sem legenda)
-    const canvasElement = container.querySelector('.bg-white.rounded-lg.border.border-border.overflow-auto');
+    // Procurar pelo container do mapa que contém SVG e riscos
+    let canvasElement: HTMLElement | null = null;
+    const svgElement = container.querySelector('[data-riskmap-svg]');
+    if (svgElement?.parentElement?.parentElement?.parentElement) {
+      canvasElement = svgElement.parentElement.parentElement.parentElement as HTMLElement;
+    }
+    if (!canvasElement) {
+      canvasElement = container.querySelector('.relative.w-full.bg-white') as HTMLElement;
+    }
+    if (!canvasElement) {
+      // Última tentativa: pegar o primeiro div com overflow-auto
+      canvasElement = container.querySelector('[style*="overflow"]') as HTMLElement;
+    }
     if (!canvasElement) {
       throw new Error('Elemento do canvas não encontrado');
     }

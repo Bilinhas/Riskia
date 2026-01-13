@@ -319,8 +319,8 @@ export default function RiskMapCanvas({
             }
           `}</style>
 
-          {/* CÍRCULOS DE RISCO COM DRAG-AND-DROP */}
-          <div className="absolute inset-0 pointer-events-none">
+          {/* CÍRCULOS DE RISCO COM DRAG-AND-DROP - DENTRO DO SVG CONTAINER */}
+          <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
             {risks.map((risk, index) => (
               <div
                 key={`risk-${risk.id}-${index}`}
