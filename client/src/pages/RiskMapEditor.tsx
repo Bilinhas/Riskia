@@ -23,13 +23,14 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
-import { Loader2, Plus, Trash2, Share2, Download } from "lucide-react";
+import { Loader2, Plus, Trash2, Share2, Download, Image } from "lucide-react";
 import { toast } from "sonner";
 import RiskMapCanvas from "@/components/RiskMapCanvas";
 import RiskLegend from "@/components/RiskLegend";
 import Header from "@/components/Header";
 import { useLocation, useRoute } from "wouter";
 import { exportMapToPDF } from "@/utils/pdfExport";
+import { exportMapToPNG } from "@/utils/pngExport";
 
 
 // ============================================================================
@@ -231,29 +232,13 @@ export default function RiskMapEditor() {
    * para evitar sobreposição total
    */
   const generateDistributedPosition = (index: number, total: number) => {
-    // Centro do mapa
+    // Todos os riscos aparecem no CENTRO do mapa
     const centerX = mapDimensions.width / 2;
     const centerY = mapDimensions.height / 2;
-    
-    // Raio máximo de distribuição ao redor do centro (em pixels)
-    const maxRadius = 150;
-    
-    // Gerar posição em círculo ao redor do centro
-    // Usar índice para distribuir uniformemente
-    const angle = (index / total) * Math.PI * 2;
-    const distance = (index % 3 + 1) * (maxRadius / 3);
-    
-    const x = centerX + Math.cos(angle) * distance;
-    const y = centerY + Math.sin(angle) * distance;
-    
-    // Adicionar pequeno offset aleatório para evitar alinhamento perfeito
-    const randomOffset = 20;
-    const finalX = x + (Math.random() - 0.5) * randomOffset;
-    const finalY = y + (Math.random() - 0.5) * randomOffset;
 
     return {
-      xPosition: Math.max(50, Math.min(mapDimensions.width - 50, finalX)),
-      yPosition: Math.max(50, Math.min(mapDimensions.height - 50, finalY)),
+      xPosition: centerX,
+      yPosition: centerY,
     };
   };
 
@@ -485,6 +470,29 @@ export default function RiskMapEditor() {
     }
   };
 
+  const handleExportPNG = async () => {
+    if (!floorPlanSvg || !mapId) {
+      toast.error("Gere um mapa antes de exportar");
+      return;
+    }
+    
+    try {
+      setIsLoading(true);
+      const timestamp = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
+      const filename = `mapa-risco-${mapId}-${timestamp}.png`;
+      
+      // Captura elemento do DOM e gera PNG
+      await exportMapToPNG('map-canvas-container', filename);
+      
+      toast.success("PNG exportado com sucesso!");
+    } catch (error) {
+      console.error("Erro ao exportar PNG:", error);
+      toast.error("Erro ao exportar PNG");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // ============================================================================
   // RENDERIZAÇÃO (JSX)
   // ============================================================================
@@ -522,6 +530,15 @@ export default function RiskMapEditor() {
                 >
                   <Download className="w-4 h-4" />
                   Exportar PDF
+                </Button>
+                <Button
+                  onClick={handleExportPNG}
+                  disabled={isLoading}
+                  className="gap-2"
+                  variant="outline"
+                >
+                  <Image className="w-4 h-4" />
+                  Exportar PNG
                 </Button>
                 {mapId && (
                   <Button
